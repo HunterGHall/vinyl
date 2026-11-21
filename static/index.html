@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vinyl</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="stylesheet" href="/css/shop.css">
+</head>
+<body class="paused">
+<div class="shell" id="shell">
+
+  <header class="head">
+    <a class="brand" href="#/home" aria-label="Vinyl home">
+      <img class="logo" id="logo" src="/favicon.png" alt="">
+      <span>VINYL</span>
+    </a>
+    <nav class="tabs" aria-label="Sections">
+      <a class="tab" data-nav="home" href="#/home">Home</a>
+      <a class="tab" data-nav="discover" href="#/discover">Discover</a>
+      <a class="tab" data-nav="library" href="#/library">Songs</a>
+      <a class="tab" data-nav="liked" href="#/liked">Liked</a>
+      <a class="tab" data-nav="playlists" href="#/playlists">Playlists</a>
+      <a class="tab" data-nav="add" href="#/add">Add</a>
+      <a class="tab" data-nav="queue" href="#/queue">Queue</a>
+    </nav>
+    <div class="head-right">
+      <div class="searchbox" id="searchbox">
+        <span class="slash">/</span>
+        <input id="q" type="search" placeholder="search songs, artists, the catalog" autocomplete="off" spellcheck="false" aria-label="Search">
+      </div>
+      <button class="stage-btn" id="toggle-np" aria-label="Open now playing"><span class="eqi" aria-hidden="true"><i></i><i></i><i></i></span>NOW PLAYING</button>
+    </div>
+  </header>
+
+
+  <main class="main" id="main">
+    <div class="view" id="view" tabindex="-1"></div>
+  </main>
+
+  <section class="stage" id="stage" aria-label="Now playing">
+    <div class="stage-art">
+      <canvas id="ascii" width="1080" height="1080" aria-label="Spinning ASCII vinyl record"></canvas>
+    </div>
+    <div class="stage-info" id="np"></div>
+  </section>
+
+  <footer class="deck">
+    <div class="deck-track" id="bar-track"></div>
+    <div class="deck-mid">
+      <div class="ctrls">
+        <button class="ctl" id="b-shuffle" title="Shuffle" aria-label="Shuffle"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="ctl" id="b-prev" title="Previous" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2.4v14H6zM20 5v14L9.5 12z"/></svg></button>
+        <button class="play-btn" id="b-play" title="Play" aria-label="Play"></button>
+        <button class="ctl" id="b-next" title="Next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M15.6 5H18v14h-2.4zM4 5l10.5 7L4 19z"/></svg></button>
+        <button class="ctl" id="b-repeat" title="Repeat" aria-label="Repeat"></button>
+      </div>
+      <div class="seek">
+        <span id="t-cur">0:00</span>
+        <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+        <span id="t-dur">0:00</span>
+      </div>
+    </div>
+    <div class="deck-right">
+      <button class="ctl" id="b-lyrics" title="Lyrics" aria-label="Lyrics"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 11h10M4 16h13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+      <button class="ctl" id="b-queue" title="Queue" aria-label="Queue"><svg viewBox="0 0 24 24"><path d="M3 6h13M3 11h13M3 16h8M17 14v6l5-3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="ctl" id="b-mute" title="Mute" aria-label="Mute"></button>
+      <input id="vol" type="range" min="0" max="100" value="70" aria-label="Volume">
+    </div>
+  </footer>
+</div>
+
+<div class="menu" id="menu" hidden></div>
+<div class="modal-wrap" id="modal" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<audio id="audio" preload="auto"></audio>
+<script src="/js/ascii.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

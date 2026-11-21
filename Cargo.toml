@@ -1,0 +1,32 @@
+[package]
+name = "vinyl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+native-tls = "0.2"
+percent-encoding = "2.3"
+png = { version = "0.17", optional = true }
+regex-lite = "0.1"
+serde_json = { version = "1", features = ["preserve_order"] }
+sha1 = "0.10"
+tao = { version = "0.37", optional = true }
+tiny_http = "0.12"
+ureq = { version = "2", default-features = false, features = ["native-tls"] }
+uuid = { version = "1", features = ["v4"] }
+wry = { version = "0.57", optional = true }
+
+[build-dependencies]
+flate2 = "1"
+
+[features]
+default = ["desktop"]
+desktop = ["dep:wry", "dep:tao", "dep:png"]
+
+# Small and quick to start. (Panics must keep unwinding: request handlers and
+# background threads catch them so one bad request can't take the app down.)
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+strip = true
