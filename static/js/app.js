@@ -793,6 +793,32 @@ function likedRecs(ids) {
   return `<div class="sect-title">Recommended</div><div class="note" style="margin-bottom:8px">Based on the songs in this playlist</div>${trackRows(rec.map(t => t.id), { num: true })}`;
 }
 
+function renderSettings() {
+  $('#view').innerHTML = `<h1 class="big">Settings</h1>
+    <div class="statline"><b>${S.tracks.length}</b> songs · <b>${S.playlists.length}</b> playlists · <b>${S.likes.size}</b> liked</div>
+    <section class="shelf"><div class="shelf-head"><div><h2>Your data</h2><div class="sub">Everything lives in the data and library folders next to the app</div></div></div>
+      <div class="set-row"><div><b>Reset recommendations</b><div class="note">Clears liked songs, listening history and play counts. Your songs and playlists stay.</div></div><button class="pill-btn ghost" data-act="reset-recs">Reset</button></div>
+      <div class="set-row"><div><b>Delete all playlists</b><div class="note">Removes every playlist. Songs stay in the library.</div></div><button class="pill-btn ghost" data-act="delete-playlists">Delete</button></div>
+      <div class="set-row"><div><b>Delete everything</b><div class="note">Deletes every song file, playlist, like and the listening history. This cannot be undone.</div></div><button class="pill-btn danger" data-act="delete-all">Delete everything</button></div>
+    </section>`;
+  $('#view').style.setProperty('--hue', '#1a120d');
+}
+async function wipe(kind) {
+  const cfg = {
+    recs: { title: 'Reset recommendations?', text: 'Liked songs, listening history and play counts will be cleared.', ok: 'Reset' },
+    playlists: { title: 'Delete all playlists?', text: 'Every playlist is removed. Your songs stay.', ok: 'Delete' },
+    all: { title: 'Delete everything?', text: 'Every song file, playlist, like and your listening history will be permanently deleted. This cannot be undone.', ok: 'Delete everything' },
+  }[kind];
+  if (!await modal({ ...cfg, danger: true })) return;
+  try {
+    if (kind === 'recs') await api('/api/history', { method: 'DELETE' });
+    else if (kind === 'playlists') await api('/api/playlists', { method: 'DELETE' });
+    else { audio.pause(); audio.removeAttribute('src'); P.cur = null; P.ctx = []; P.order = []; P.userQ = []; P.pos = -1; await api('/api/tracks', { method: 'DELETE' }); await api('/api/playlists', { method: 'DELETE' }); await api('/api/history', { method: 'DELETE' }); renderBarTrack(); renderNP(); }
+  } catch (e) { toast(e.message); return; }
+  S.cache = {}; S.mixNews = {}; S.recs = null;
+  await loadAll(); renderRoute(true); toast('Done');
+}
+
 function renderPlaylists() {
   $('#view').innerHTML = `<h1 class="big">Playlists</h1>
     <div class="actions" style="margin-top:18px"><button class="pill-btn" data-act="new-playlist">New playlist</button></div>
@@ -1175,7 +1201,7 @@ async function deleteTrack(t) {
 /* ------------------------------------------------------------------ router */
 
 let route = { name: 'home', arg: '' };
-const ROUTES = ['home', 'playlists', 'search', 'library', 'liked', 'playlist', 'artist', 'mix', 'add', 'queue', 'discover', 'genre', 'dz'];
+const ROUTES = ['home', 'settings', 'playlists', 'search', 'library', 'liked', 'playlist', 'artist', 'mix', 'add', 'queue', 'discover', 'genre', 'dz'];
 function parseHash() {
   const [, name = 'home', ...rest] = (location.hash || '#/home').split('/');
   const arg = decodeURIComponent(rest.join('/'));
@@ -1203,6 +1229,7 @@ function renderRoute(keepScroll) {
     case 'add': renderAdd(); break;
     case 'queue': renderQueue(); break;
     case 'playlists': renderPlaylists(); break;
+    case 'settings': renderSettings(); break;
     case 'discover': renderDiscover(); break;
     case 'genre': renderGenre(route.arg); break;
     case 'dz': renderDz(route.arg); break;
@@ -1245,6 +1272,9 @@ document.addEventListener('click', async e => {
       case 'play-card': playSource(d.play); return;
       case 'shuffle-card': playSource(d.play, { shuffle: true }); return;
       case 'play-ids': playSource(d.key); return;
+      case 'reset-recs': wipe('recs'); return;
+      case 'delete-playlists': wipe('playlists'); return;
+      case 'delete-all': wipe('all'); return;
       case 'play-pv': playPv(d.key, actEl); return;
       case 'add-pv': { const pt = trackOf(d.id); if (pt) addPv(pt); return; }
       case 'play-previews': { const ids = (S.lists[d.list] || []); setContext(ids, 0, { label: d.label || 'Previews' }); return; }

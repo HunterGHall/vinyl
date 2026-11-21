@@ -207,6 +207,14 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
         },
         (Method::Delete, ["api", "likes", id]) => ok(json!({"liked": set_liked(id, false)})),
         (Method::Get, ["api", "history"]) => ok(load_history()),
+        // Reset what the recommendations learn from: likes, listening history and play counts.
+        (Method::Delete, ["api", "history"]) => {
+            let _g = lock();
+            let _ = store::write_json(&paths().likes, &json!([]), true, true);
+            let _ = store::write_json(&paths().history, &json!([]), true, true);
+            save_stats(&json!({}));
+            empty(204)
+        }
 
         // ---- lyrics ----
         (Method::Post, ["api", "tracks", id, "lyrics", "offset"]) => lyrics_offset(id, &b()),
@@ -509,6 +517,8 @@ fn delete_all_tracks() -> Resp {
         save_playlists(&playlists);
         let empty_obj = json!({});
         save_stats(&empty_obj);
+        let _ = store::write_json(&paths().likes, &json!([]), true, true);
+        let _ = store::write_json(&paths().history, &json!([]), true, true);
         let _ = store::write_json(&paths().sources, &empty_obj, true, true);
         let _ = store::write_json(&paths().loudness, &empty_obj, true, true);
         save_meta(&empty_obj);
