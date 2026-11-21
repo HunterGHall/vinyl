@@ -1,4 +1,5 @@
-//! A local.vinyl.player: Rust port of the Flask + pywebview app.
+#![cfg_attr(all(windows, feature = "desktop", not(debug_assertions)), windows_subsystem = "windows")]
+//! Vinyl: a local music player, ported from the Flask + pywebview app.
 //!
 //! Download tracks or whole playlists from YouTube/Spotify links, organise them
 //! into playlists and play them back - all stored locally. Needs `yt-dlp`,
@@ -17,6 +18,7 @@ mod routes;
 mod spotify;
 mod store;
 mod tools;
+mod update;
 mod util;
 
 const DEFAULT_PORT: u16 = 8735;

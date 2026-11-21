@@ -5,50 +5,57 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vinyl</title>
 <link rel="icon" type="image/png" href="/favicon.png">
-<link rel="stylesheet" href="/css/shop.css">
+<link rel="stylesheet" href="/css/app.css">
 </head>
 <body class="paused">
 <div class="shell" id="shell">
 
-  <header class="head">
+  <aside class="side">
     <a class="brand" href="#/home" aria-label="Vinyl home">
       <img class="logo" id="logo" src="/favicon.png" alt="">
-      <span>VINYL</span>
+      <span>Vinyl</span>
     </a>
-    <nav class="tabs" aria-label="Sections">
-      <a class="tab" data-nav="home" href="#/home">Home</a>
-      <a class="tab" data-nav="discover" href="#/discover">Discover</a>
-      <a class="tab" data-nav="library" href="#/library">Songs</a>
-      <a class="tab" data-nav="liked" href="#/liked">Liked</a>
-      <a class="tab" data-nav="playlists" href="#/playlists">Playlists</a>
-      <a class="tab" data-nav="add" href="#/add">Add</a>
-      <a class="tab" data-nav="queue" href="#/queue">Queue</a>
-      <a class="tab" data-nav="settings" href="#/settings">Settings</a>
-    </nav>
-    <div class="head-right">
-      <div class="searchbox" id="searchbox">
-        <span class="slash">/</span>
-        <input id="q" type="search" placeholder="search songs, artists, the catalog" autocomplete="off" spellcheck="false" aria-label="Search">
-      </div>
-      <button class="stage-btn" id="toggle-np" aria-label="Open now playing"><span class="eqi" aria-hidden="true"><i></i><i></i><i></i></span>NOW PLAYING</button>
-    </div>
-  </header>
+    <label class="search" id="searchbox">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.2 15.2 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="q" type="search" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search">
+    </label>
 
+    <nav class="nav" aria-label="Sections">
+      <a class="tab nav-link" data-nav="home" href="#/home"><svg viewBox="0 0 24 24"><path d="M12 3.2 3 10.6V20a1 1 0 0 0 1 1h5.5v-6h5v6H20a1 1 0 0 0 1-1v-9.4z"/></svg>Home</a>
+      <a class="tab nav-link" data-nav="discover" href="#/discover"><svg viewBox="0 0 24 24"><path d="m12 2.8 2.6 6.1 6.6.5-5 4.3 1.5 6.5L12 16.7l-5.7 3.5 1.5-6.5-5-4.3 6.6-.5z"/></svg>Discover</a>
+      <a class="tab nav-link" data-nav="library" href="#/library"><svg viewBox="0 0 24 24"><path d="M9 17.5V6l10-2v11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="6.5" cy="17.5" r="2.6"/><circle cx="16.5" cy="15.5" r="2.6"/></svg>Songs</a>
+      <a class="tab nav-link" data-nav="liked" href="#/liked"><svg viewBox="0 0 24 24"><path d="M12 20.5s-8.5-5-8.5-11.2A4.7 4.7 0 0 1 12 6.6a4.7 4.7 0 0 1 8.5 2.7c0 6.2-8.5 11.2-8.5 11.2z"/></svg>Liked Songs</a>
+      <a class="tab nav-link" data-nav="add" href="#/add"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v9M7.5 12h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Add Music</a>
+      <a class="tab nav-link" data-nav="queue" href="#/queue"><svg viewBox="0 0 24 24"><path d="M3 6h13M3 11h13M3 16h8M17 14v6l5-3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Queue</a>
+    </nav>
+
+    <div class="side-head">
+      <a href="#/playlists" class="tab" data-nav="playlists">Playlists</a>
+      <button class="icon-btn" data-act="new-playlist" title="New playlist" aria-label="New playlist"><svg viewBox="0 0 24 24"><path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z"/></svg></button>
+    </div>
+    <div class="lib-list" id="lib-list"></div>
+
+    <div class="side-foot">
+      <a class="tab nav-link" data-nav="settings" href="#/settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.8v2.6M12 18.6v2.6M4.6 7.4l2.2 1.3M17.2 15.3l2.2 1.3M4.6 16.6l2.2-1.3M17.2 8.7l2.2-1.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Settings</a>
+    </div>
+  </aside>
 
   <main class="main" id="main">
     <div class="view" id="view" tabindex="-1"></div>
   </main>
 
   <section class="stage" id="stage" aria-label="Now playing">
+    <button class="close-stage" id="close-stage" aria-label="Close now playing"><svg viewBox="0 0 24 24"><path d="m5 9 7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="stage-art">
+      <div class="platter"></div>
       <canvas id="ascii" width="1080" height="1080" aria-label="Spinning ASCII vinyl record"></canvas>
     </div>
     <div class="stage-info" id="np"></div>
   </section>
 
-  <footer class="deck">
-    <div class="deck-track" id="bar-track"></div>
-    <div class="deck-mid">
+  <footer class="dock" id="dock">
+    <div class="dock-track" id="bar-track"></div>
+    <div class="dock-mid">
       <div class="ctrls">
         <button class="ctl" id="b-shuffle" title="Shuffle" aria-label="Shuffle"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="ctl" id="b-prev" title="Previous" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2.4v14H6zM20 5v14L9.5 12z"/></svg></button>
@@ -62,11 +69,12 @@
         <span id="t-dur">0:00</span>
       </div>
     </div>
-    <div class="deck-right">
+    <div class="dock-right">
       <button class="ctl" id="b-lyrics" title="Lyrics" aria-label="Lyrics"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 11h10M4 16h13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
       <button class="ctl" id="b-queue" title="Queue" aria-label="Queue"><svg viewBox="0 0 24 24"><path d="M3 6h13M3 11h13M3 16h8M17 14v6l5-3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="ctl" id="b-mute" title="Mute" aria-label="Mute"></button>
       <input id="vol" type="range" min="0" max="100" value="70" aria-label="Volume">
+      <button class="ctl expand" id="toggle-np" title="Now playing" aria-label="Open now playing"><svg viewBox="0 0 24 24"><path d="m5 15 7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
   </footer>
 </div>

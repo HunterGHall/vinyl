@@ -120,9 +120,10 @@ function mosaicHTML(ids, cls = '') {
 const likedArt = cls => `<div class="art liked ${cls}">${ICON.heartFill}</div>`;
 
 const colorCache = new Map();
-function coverColor(url) {
+function coverColor(url, k = 0.62) {
   if (!url) return Promise.resolve(null);
-  if (colorCache.has(url)) return Promise.resolve(colorCache.get(url));
+  const ck = url + '|' + k;
+  if (colorCache.has(ck)) return Promise.resolve(colorCache.get(ck));
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
@@ -136,9 +137,9 @@ function coverColor(url) {
           const k = 0.15 + (mx - mn) / 255; // favour saturated pixels
           r += d[i] * k; g += d[i + 1] * k; b += d[i + 2] * k; w += k;
         }
-        const f = 0.62 / Math.max(0.01, w); // darken so text stays readable
+        const f = k / Math.max(0.01, w); // darken so text stays readable
         const col = `rgb(${Math.round(r * f)},${Math.round(g * f)},${Math.round(b * f)})`;
-        colorCache.set(url, col); res(col);
+        colorCache.set(ck, col); res(col);
       } catch { res(null); }
     };
     img.onerror = () => res(null);
@@ -324,6 +325,7 @@ function loadTrack(id, autoplay, resumeAt = 0) {
   const t = trackOf(id); if (!t) return;
   P.cur = t; P.recorded = !!t.isPv;
   AsciiVinyl.setCover(t.cover);
+  coverColor(t.cover, 1.05).then(c => $('#stage').style.setProperty('--tint', c || '#3a2418'));
   if (t.isPv) { // not in the library yet: download it, then play the real file
     audio.pause(); audio.removeAttribute('src');
     renderBarTrack(); renderNP(); markNow();
@@ -419,7 +421,8 @@ $('#seek').addEventListener('input', e => { seeking = true; e.target.style.setPr
 $('#seek').addEventListener('change', e => { if (audio.duration) audio.currentTime = e.target.value / 1000 * audio.duration; seeking = false; });
 $('#b-queue').onclick = () => go(route.name === 'queue' ? '#/home' : '#/queue');
 $('#b-lyrics').onclick = () => { if (S.np && S.lyrics) S.np = false; else { S.np = true; S.lyrics = true; } applyNPState(); };
-$('#bar-track').addEventListener('click', e => { if (e.target.closest('.art')) { S.np = !S.np; applyNPState(); } });
+$('#bar-track').addEventListener('click', e => { if (e.target.closest('.disc')) { S.np = !S.np; applyNPState(); } });
+$('#close-stage').onclick = () => { S.np = false; applyNPState(); };
 $('#toggle-np').onclick = () => { S.np = !S.np; applyNPState(); };
 function applyNPState() {
   document.body.classList.toggle('stage-open', S.np);
@@ -472,8 +475,9 @@ const artistLink = t => `<a href="#/artist/${enc(primaryArtist(t.artist))}">${es
 
 function renderBarTrack() {
   const t = P.cur, el = $('#bar-track');
-  if (!t) { el.innerHTML = ''; return; }
-  el.innerHTML = `${artHTML(t)}<div class="txt"><div class="tt">${esc(t.title)}</div><div class="ta">${t.isPv ? `<span class="newtag">DOWNLOADING</span>${esc(t.artist)}` : artistLink(t)}</div></div>${heartBtn(t.id)}`;
+  if (!t) { el.innerHTML = '<div class="disc"><div class="label"></div></div><div class="txt"><div class="empty-note">Nothing playing</div></div>'; return; }
+  const cover = t.cover ? `background-image:url('${esc(t.cover)}')` : `background:hsl(${hueOf(t)} 45% 34%)`;
+  el.innerHTML = `<div class="disc" title="Now playing"><div class="label" style="${cover}"></div></div><div class="txt"><div class="tt">${esc(t.title)}</div><div class="ta">${t.isPv ? `<span class="newtag">DOWNLOADING</span>${esc(t.artist)}` : artistLink(t)}</div></div>${heartBtn(t.id)}`;
 }
 function syncHearts() {
   $$('.heart[data-id]').forEach(b => {
@@ -498,14 +502,13 @@ function nextUpIds() { return [...P.userQ, ...P.order.slice(P.pos + 1)].slice(0,
 function renderNP() {
   const el = $('#np'); if (!S.np) return;
   const t = P.cur;
-  if (!t) { el.innerHTML = `<div class="np-head"><span>Now playing</span></div><p class="note">Play something and the record spins up here, with lyrics and similar songs.</p>`; return; }
+  if (!t) { el.innerHTML = `<div class="np-head">Now playing</div><p class="note">Play something and the record spins up here, with its lyrics.</p>`; return; }
   el.innerHTML = `
-    <div class="np-head"><span>${esc(P.label || 'Now playing')}</span></div>
+    <div class="np-head">${esc(P.label || 'Now playing')}</div>
     <div class="np-title"><div><div class="tt">${esc(t.title)}</div><div class="np-artist">${t.isPv ? esc(t.artist) : artistLink(t)}</div></div>${heartBtn(t.id)}</div>
     ${t.isPv ? `<div class="pv-note">Downloading this song to your library. It starts playing as soon as it is ready.</div>` : ''}
-    ${S.lyrics && !t.isPv ? `<div class="np-sec"><h4>Lyrics <button data-act="refresh-lyrics">Reload</button></h4><div id="lyr" class="lyr plain"><p class="note">Loading lyrics…</p></div></div>` : ''}
-    ${nextUpIds().length ? `<div class="np-sec"><h4>Next in queue <button data-nav="#/queue">Open queue</button></h4>${nextUpIds().map(id => miniRow(trackOf(id))).join('')}</div>` : ''}`;
-  if (S.lyrics && !t.isPv) loadLyrics(t);
+    ${t.isPv ? '' : `<div class="np-sec grow"><h4>Lyrics <button data-act="refresh-lyrics">Reload</button></h4><div id="lyr" class="lyr plain"><p class="note">Loading lyrics…</p></div></div>`}`;
+  if (!t.isPv) loadLyrics(t);
 }
 const miniRow = t => t ? `<button class="mini" data-id="${esc(t.id)}" data-act="play-one">${artHTML(t)}<div class="txt"><div class="tt">${esc(t.title)}</div><div class="ta">${esc(t.artist)}</div></div></button>` : '';
 
@@ -595,10 +598,10 @@ function playlistArt(pl, cls = '') {
 }
 
 let shelfN = 0;
-function shelf(title, sub, cards, id) {
+function shelf(title, sub, cards, id, cls = '') {
   if (!cards.length) return '';
   shelfN++;
-  return `<section class="shelf"><div class="shelf-head"><div><h2><i>${String(shelfN).padStart(2, '0')}</i>${esc(title)}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div><button data-act="toggle-shelf" aria-expanded="false">Show all</button></div><div class="grid" ${id ? `id="${id}"` : ''}>${cards.join('')}</div></section>`;
+  return `<section class="shelf ${cls}"><div class="shelf-head"><div><h2><i>${String(shelfN).padStart(2, '0')}</i>${esc(title)}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div><button data-act="toggle-shelf" aria-expanded="false">Show all</button></div><div class="grid" ${id ? `id="${id}"` : ''}>${cards.join('')}</div></section>`;
 }
 
 const greeting = () => { const h = new Date().getHours(); return h < 5 ? 'Late night vibes' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
@@ -617,8 +620,8 @@ function renderHome() {
   for (const k of sh.topArtists.slice(0, 8 - tiles.length)) { const ts = T.byArtist.get(k) || []; tiles.push(qtile(`${artHTML(ts[0])}<div class="t">${esc(T.names.get(k))}</div>`, 'artist:' + k, `#/artist/${enc(T.names.get(k))}`)); }
   const hasTaste = S.history.length > 0 || S.likes.size > 0 || S.tracks.some(t => t.plays);
   const again = sh.recent.length ? shelf('Pick up where you left off', '', sh.recent.slice(0, 6).map(trackCard)) : shelf('Recently added', '', sh.added.slice(0, 6).map(trackCard));
-  view.innerHTML = `<h1 class="big">${greeting()}</h1>
-    ${shelf('Made for you', '', sh.mixes.map(mixCard))}
+  view.innerHTML = `<h1 class="big">Home</h1>
+    ${shelf('Made for You', '', sh.mixes.map(mixCard), '', 'picks')}
     <div id="web-recs"></div>`;
   tint(P.cur ? [P.cur.id] : sh.recent.slice(0, 1));
   ensureMixNews();
@@ -690,7 +693,7 @@ const mixIds = m => mixEntries(m).map(e => e.id || registerPv(e.web));
 /* "New music for you" is computed once and kept for a while, so the shelf never reshuffles under you. */
 let recsLoading = null;
 function recsShelf(r) {
-  return shelf('New music for you', `From artists like ${r.seeds.join(', ')}. Click to download and play.`, r.items.map(webCard));
+  return shelf('New Music', `From artists like ${r.seeds.join(', ')}. Click to download and play.`, r.items.map(webCard));
 }
 async function loadWebRecs() {
   const box = $('#web-recs'); if (!box) return;
@@ -793,15 +796,50 @@ function likedRecs(ids) {
   return `<div class="sect-title">Recommended</div><div class="note" style="margin-bottom:8px">Based on the songs in this playlist</div>${trackRows(rec.map(t => t.id), { num: true })}`;
 }
 
+/* ---- app updates (the server asks GitHub for the latest release) ---- */
+async function checkForUpdate({ manual = false } = {}) {
+  let info;
+  try { info = await api('/api/update'); }
+  catch (e) { if (manual) toast(e.message); return null; }
+  S.update = info;
+  if (!info.available) { if (manual) toast(`You're up to date (Vinyl ${info.current})`); return info; }
+  const notes = String(info.notes || '').trim().split('\n').slice(0, 8).join('\n');
+  const yes = await modal({ title: 'Update available', text: `Vinyl ${info.latest} is ready. You have ${info.current}.${notes ? '\n\n' + notes : ''}`, ok: 'Install and restart', cancel: 'Not now' });
+  if (yes) installUpdate();
+  return info;
+}
+async function installUpdate() {
+  const w = $('#modal');
+  const show = (msg, pct, closable) => {
+    w.hidden = false;
+    w.innerHTML = `<div class="modal"><h3>Updating Vinyl</h3><p>${esc(msg)}</p>${closable ? '<div class="btns"><button class="pill-btn" data-x="close">Close</button></div>' : `<div class="bar"><i style="width:${pct}%"></i></div>`}</div>`;
+    if (closable) $('[data-x]', w).onclick = () => { w.hidden = true; w.innerHTML = ''; };
+  };
+  show('Starting the download…', 0);
+  try { await api('/api/update/install', { method: 'POST' }); } catch (e) { show(e.message, 0, true); return; }
+  for (;;) {
+    await new Promise(r => setTimeout(r, 500));
+    let st;
+    try { st = await api('/api/update/status'); } catch { show('Restarting Vinyl…', 100); return; } // the app has exited for the installer
+    if (st.status === 'downloading') show(st.total ? `Downloading… ${Math.round(st.done / st.total * 100)}%` : 'Downloading…', st.total ? st.done / st.total * 100 : 5);
+    else if (st.status === 'launching') show('Installing. Vinyl will reopen in a moment.', 100);
+    else if (st.status === 'error') { show(st.error || 'The update failed.', 0, true); return; }
+  }
+}
+
 function renderSettings() {
   $('#view').innerHTML = `<h1 class="big">Settings</h1>
     <div class="statline"><b>${S.tracks.length}</b> songs · <b>${S.playlists.length}</b> playlists · <b>${S.likes.size}</b> liked</div>
+    <section class="shelf"><div class="shelf-head"><div><h2>Updates</h2><div class="sub">Vinyl checks for a new version each time it starts</div></div></div>
+      <div class="set-row"><div><b>Version</b><div class="note" id="upd-ver">Checking…</div></div><button class="pill-btn ghost" data-act="check-update">Check for updates</button></div>
+    </section>
     <section class="shelf"><div class="shelf-head"><div><h2>Your data</h2><div class="sub">Everything lives in the data and library folders next to the app</div></div></div>
       <div class="set-row"><div><b>Reset recommendations</b><div class="note">Clears liked songs, listening history and play counts. Your songs and playlists stay.</div></div><button class="pill-btn ghost" data-act="reset-recs">Reset</button></div>
       <div class="set-row"><div><b>Delete all playlists</b><div class="note">Removes every playlist. Songs stay in the library.</div></div><button class="pill-btn ghost" data-act="delete-playlists">Delete</button></div>
       <div class="set-row"><div><b>Delete everything</b><div class="note">Deletes every song file, playlist, like and the listening history. This cannot be undone.</div></div><button class="pill-btn danger" data-act="delete-all">Delete everything</button></div>
     </section>`;
   $('#view').style.setProperty('--hue', '#1a120d');
+  api('/api/update/status').then(st => { const el = $('#upd-ver'); if (el) el.textContent = `Vinyl ${st.current}${S.update ? (S.update.available ? ` · ${S.update.latest} is available` : ' · up to date') : ''}`; }).catch(() => { });
 }
 async function wipe(kind) {
   const cfg = {
@@ -1068,20 +1106,8 @@ async function renderDz(id) {
 
 function renderLibrary() {
   const el = $('#lib-list'); if (!el) return;
-  const f = S.libFilter;
-  const parts = [];
-  const cur = P.cur?.id;
-  if (f === 'all' || f === 'playlists') {
-    parts.push(`<button class="lib-item ${route.name === 'liked' ? 'on' : ''}" data-href="#/liked">${likedArt('')}<div class="txt"><div class="t">Liked Songs</div><div class="s">Playlist · ${plural(S.likes.size, 'song')}</div></div></button>`);
-    for (const pl of S.playlists) parts.push(`<button class="lib-item ${route.name === 'playlist' && route.arg === pl.id ? 'on' : ''}" data-href="#/playlist/${pl.id}" data-pl="${esc(pl.id)}">${playlistArt(pl)}<div class="txt"><div class="t">${esc(pl.name)}</div><div class="s">Playlist · ${plural((pl.track_ids || []).length, 'song')}</div></div></button>`);
-    for (const m of mixes()) parts.push(`<button class="lib-item ${route.name === 'mix' && route.arg === String(m.n) ? 'on' : ''}" data-href="#/mix/${m.n}">${mosaicHTML(m.ids)}<div class="txt"><div class="t">${esc(m.name)}</div><div class="s">Made for you</div></div></button>`);
-  }
-  if (f === 'all' || f === 'artists') {
-    const T = taste();
-    const ks = [...T.byArtist.keys()].sort((a, b) => (T.aff.get(b) || 0) - (T.aff.get(a) || 0) || a.localeCompare(b));
-    for (const k of (f === 'all' ? ks.slice(0, 30) : ks)) { const n = T.names.get(k); parts.push(`<button class="lib-item ${route.name === 'artist' && (route.arg || '').toLowerCase() === k ? 'on' : ''}" data-href="#/artist/${enc(n)}">${artHTML(T.byArtist.get(k)[0], 'round')}<div class="txt"><div class="t">${esc(n)}</div><div class="s">Artist</div></div></button>`); }
-  }
-  el.innerHTML = parts.join('') || '<p class="note" style="padding:12px">Nothing here yet.</p>';
+  el.innerHTML = S.playlists.map(pl => `<button class="lib-item ${route.name === 'playlist' && route.arg === pl.id ? 'on' : ''}" data-href="#/playlist/${pl.id}" data-pl="${esc(pl.id)}">${playlistArt(pl)}<div class="txt"><div class="t">${esc(pl.name)}</div></div></button>`).join('')
+    || '<p class="side-empty">No playlists yet</p>';
 }
 
 /* ------------------------------------------------------------ menus + modal */
@@ -1141,10 +1167,10 @@ function playlistMenu(pid, x, y) {
   ]);
 }
 
-function modal({ title, text = '', input = null, ok = 'OK', danger = false }) {
+function modal({ title, text = '', input = null, ok = 'OK', cancel = 'Cancel', danger = false }) {
   return new Promise(res => {
     const w = $('#modal');
-    w.innerHTML = `<form class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${text ? `<p>${esc(text)}</p>` : ''}${input !== null ? `<input class="field" name="v" value="${esc(input)}" maxlength="120" autocomplete="off" aria-label="${esc(title)}">` : ''}<div class="btns"><button type="button" class="chip" data-x="cancel">Cancel</button><button class="pill-btn" style="${danger ? 'background:#ff6a4d' : ''}">${esc(ok)}</button></div></form>`;
+    w.innerHTML = `<form class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${text ? `<p>${esc(text)}</p>` : ''}${input !== null ? `<input class="field" name="v" value="${esc(input)}" maxlength="120" autocomplete="off" aria-label="${esc(title)}">` : ''}<div class="btns"><button type="button" class="chip" data-x="cancel">${esc(cancel)}</button><button class="pill-btn ${danger ? 'danger' : ''}">${esc(ok)}</button></div></form>`;
     w.hidden = false;
     const f = $('form', w), inp = $('input', w);
     (inp || $('.pill-btn', w)).focus(); inp?.select();
@@ -1272,6 +1298,7 @@ document.addEventListener('click', async e => {
       case 'play-card': playSource(d.play); return;
       case 'shuffle-card': playSource(d.play, { shuffle: true }); return;
       case 'play-ids': playSource(d.key); return;
+      case 'check-update': { const i = await checkForUpdate({ manual: true }); const el = $('#upd-ver'); if (el && i) el.textContent = `Vinyl ${i.current}${i.available ? ` · ${i.latest} is available` : ' · up to date'}`; return; }
       case 'reset-recs': wipe('recs'); return;
       case 'delete-playlists': wipe('playlists'); return;
       case 'delete-all': wipe('all'); return;
@@ -1366,7 +1393,9 @@ document.addEventListener('mouseover', e => { // seek bar gets the accent while 
   catch (e) { $('#view').innerHTML = `<div class="empty"><b>Can't reach the Vinyl server</b>${esc(e.message)}</div>`; return; }
   await restoreState();
   renderRoute(false);
+  renderBarTrack();
   applyNPState();
+  setTimeout(() => checkForUpdate(), 2500); // ask GitHub whether there is a newer release
   setInterval(() => { // pick up songs added outside the app (downloads finishing, new files)
     if (document.hidden) return;
     api('/api/library').then(ts => { if (ts.length !== S.tracks.length) loadAll().then(() => { renderLibrary(); if (route.name === 'home' || route.name === 'library') renderRoute(true); }); }).catch(() => { });

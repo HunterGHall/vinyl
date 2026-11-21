@@ -35,17 +35,32 @@ pub struct Paths {
 
 static PATHS: OnceLock<Paths> = OnceLock::new();
 
+/// Where the library lives when `MUSIC_HOME` isn't set: the current directory if it already holds
+/// a library (running from a checkout), otherwise `%LOCALAPPDATA%\Vinyl` so an installed copy
+/// keeps its music and settings outside the program folder and across updates.
+fn default_home() -> PathBuf {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    if cwd.join("library").is_dir() || cwd.join("data").is_dir() {
+        return cwd;
+    }
+    match std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("XDG_DATA_HOME")) {
+        Some(dir) => PathBuf::from(dir).join("Vinyl"),
+        None => cwd,
+    }
+}
+
 /// Sets up the directory layout. `MUSIC_HOME` (or the current directory) holds
 /// `library/`, `data/` and `static/`, exactly like the original app.
 pub fn init() -> &'static Paths {
     PATHS.get_or_init(|| {
-        let base = std::env::var_os("MUSIC_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        let base = std::env::var_os("MUSIC_HOME").map(PathBuf::from).unwrap_or_else(default_home);
+        let _ = fs::create_dir_all(&base);
         let base = fs::canonicalize(&base).unwrap_or(base);
         let base = PathBuf::from(base.to_string_lossy().trim_start_matches(r"\\?\").to_string());
         let library = base.join("library");
         let data = base.join("data");
+        let _ = fs::create_dir_all(&library);
+        let _ = fs::create_dir_all(&data);
         Paths {
             covers: library.join("covers"),
             static_dir: base.join("static"),

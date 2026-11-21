@@ -3,7 +3,7 @@
 use crate::library::*;
 use crate::store::{self, lock, paths};
 use crate::util::{clip, is_spotify_playlist_url, unquote};
-use crate::{discover, download, lyrics, tools};
+use crate::{discover, download, lyrics, tools, update};
 use serde_json::{Map, Value, json};
 use std::fs;
 use std::io::{Cursor, Read, Seek, SeekFrom};
@@ -393,6 +393,14 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
                 Err(e) => err(502, &e),
             }
         }
+        // ---- app updates ----
+        (Method::Get, ["api", "update"]) => match update::check() {
+            Ok(v) => ok(v),
+            Err(e) => err(502, &e),
+        },
+        (Method::Get, ["api", "update", "status"]) => ok(update::status()),
+        (Method::Post, ["api", "update", "install"]) => json_resp(202, json!({"started": update::install()})),
+
         // ---- discovery (Deezer) ----
         (Method::Get, ["api", "discover", what]) => {
             let q = |k: &str| unquote(&cx.query_param(k).unwrap_or("").replace('+', " "));

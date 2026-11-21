@@ -126,7 +126,7 @@ const AsciiVinyl = (() => {
     drawSource(ang);
     gctx.drawImage(src, 0, 0, cols, rows);
     const d = gctx.getImageData(0, 0, cols, rows).data;
-    octx.fillStyle = '#000'; octx.fillRect(0, 0, S, S);
+    octx.clearRect(0, 0, S, S);
     octx.font = `${Math.round(ch * 0.95)}px ui-monospace, Consolas, "Courier New", monospace`;
     octx.textAlign = 'center'; octx.textBaseline = 'middle';
     const ramp = RAMPS[cfg.ramp], L = ramp.length, mono = MONO[cfg.color];

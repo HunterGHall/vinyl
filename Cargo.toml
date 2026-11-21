@@ -1,6 +1,6 @@
 [package]
 name = "vinyl"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
@@ -10,6 +10,7 @@ png = { version = "0.17", optional = true }
 regex-lite = "0.1"
 serde_json = { version = "1", features = ["preserve_order"] }
 sha1 = "0.10"
+sha2 = "0.10"
 tao = { version = "0.37", optional = true }
 tiny_http = "0.12"
 ureq = { version = "2", default-features = false, features = ["native-tls"] }
