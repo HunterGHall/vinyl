@@ -988,7 +988,7 @@ function renderAdd() {
       <button class="pill-btn" data-act="add-url" data-mode="track">Add song</button><button class="pill-btn ghost" data-act="add-url" data-mode="playlist">Add playlist</button></div>
     <div id="deps-banner"></div>
     <div class="jobs" id="jobs"></div><div id="web-recs"></div>`;
-  $('#view').style.setProperty('--hue', '#2f3a2a');
+  $('#view').style.setProperty('--hue', '#3a2418');
   renderJobs(); loadWebRecs(); refreshDeps();
 }
 
@@ -1014,7 +1014,18 @@ async function refreshDeps() {
 }
 function renderJobs() {
   const box = $('#jobs'); if (!box) return;
-  box.innerHTML = S.jobs.slice().reverse().map(j => `<div class="job ${j.status === 'error' ? 'err' : ''}"><div>${esc(j.label)} — ${j.status === 'done' ? 'added' : j.status === 'error' ? esc(j.error || 'failed') : esc(j.percent || 'downloading…')}</div>${j.status === 'downloading' ? `<div class="pb"><i style="width:${Math.round((j.fraction || 0) * 100)}%"></i></div>` : ''}</div>`).join('');
+  box.innerHTML = S.jobs.slice().reverse().map(j => `<div class="job ${j.status === 'error' ? 'err' : ''}"><div>${esc(j.label)} — ${j.status === 'done' ? esc(j.summary || 'added') : j.status === 'error' ? esc(j.error || 'failed') : esc(j.detail || j.percent || 'downloading…')}</div>${j.status === 'downloading' ? `<div class="pb"><i style="width:${Math.round((j.progress ?? j.fraction ?? 0) * 100)}%"></i></div>` : ''}</div>`).join('');
+}
+
+/* Reload the library while a big import is still running, so songs show up one by one. */
+let lastLiveRefresh = 0;
+function refreshWhileImporting() {
+  if (Date.now() - lastLiveRefresh < 2500) return;
+  lastLiveRefresh = Date.now();
+  loadAll().then(() => {
+    renderLibrary();
+    if (['home', 'library', 'liked', 'playlist', 'playlists', 'artist'].includes(route.name)) renderRoute(true);
+  }).catch(() => { });
 }
 async function startJob(label, body, { quiet = false } = {}) {
   const job = { label, status: 'downloading', fraction: 0 };
@@ -1024,7 +1035,15 @@ async function startJob(label, body, { quiet = false } = {}) {
     for (;;) {
       await new Promise(r => setTimeout(r, 1000));
       const j = await api(`/api/download/${job_id}`);
+      const nAdded = j.added?.length || 0, nSkipped = j.skipped?.length || 0, nFailed = j.failed?.length || 0;
+      const done = nAdded + nSkipped + nFailed, total = j.total || 0;
       Object.assign(job, { status: j.status, percent: j.percent, fraction: j.fraction, error: j.error, fileId: j.id });
+      if (total) { // a playlist import: the bar moves with every finished song
+        job.progress = Math.min(1, (done + (j.status === 'downloading' ? (j.fraction || 0) : 0)) / total);
+        job.detail = `${done} of ${total}${j.current_title && j.status === 'downloading' ? ' · ' + j.current_title : ''}`;
+        job.summary = `${nAdded} added${nSkipped ? `, ${nSkipped} already in your library` : ''}${nFailed ? `, ${nFailed} failed` : ''}`;
+        if (nAdded !== (job.lastAdded || 0)) { job.lastAdded = nAdded; refreshWhileImporting(); }
+      }
       renderJobs();
       if (j.status !== 'downloading') break;
     }
