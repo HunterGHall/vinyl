@@ -1183,6 +1183,21 @@ function modal({ title, text = '', input = null, ok = 'OK', cancel = 'Cancel', d
 }
 function closeModal() { modal.close?.(); }
 
+/* Importing a playlist link: keep it as a playlist, or just add its songs to the library. */
+function askPlaylistChoice() {
+  return new Promise(res => {
+    const w = $('#modal');
+    w.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="Import playlist"><h3>Import this playlist?</h3><p>Save it as a playlist in Vinyl, or only add its songs to your library.</p>
+      <div class="btns stack"><button class="pill-btn" data-c="playlist">Save as a playlist</button><button class="pill-btn ghost" data-c="songs">Just add the songs</button><button class="chip" data-c="">Cancel</button></div></div>`;
+    w.hidden = false;
+    const done = v => { w.hidden = true; w.innerHTML = ''; modal.close = null; res(v); };
+    modal.close = () => done(null);
+    $$('[data-c]', w).forEach(b => { b.onclick = () => done(b.dataset.c || null); });
+    w.onmousedown = e => { if (e.target === w) done(null); };
+    $('[data-c="playlist"]', w).focus();
+  });
+}
+
 async function newPlaylist() {
   const name = await modal({ title: 'Create playlist', input: `My Playlist #${S.playlists.length + 1}`, ok: 'Create' });
   if (!name) return null;
@@ -1326,8 +1341,12 @@ document.addEventListener('click', async e => {
       }
       case 'add-url': {
         const url = $('#add-url').value.trim(); if (!url) { toast('Paste a link first'); return; }
+        const isList = d.mode === 'playlist' || /spotify\.com\/(playlist|album)\//i.test(url) || /[?&]list=|youtube\.com\/playlist/i.test(url);
+        if (!isList) { $('#add-url').value = ''; startJob('Song', { url, mode: 'track', as_playlist: true }); return; }
+        const choice = await askPlaylistChoice();
+        if (!choice) return;
         $('#add-url').value = '';
-        startJob(d.mode === 'playlist' ? 'Playlist' : 'Song', { url, mode: d.mode, as_playlist: true });
+        startJob(choice === 'playlist' ? 'Playlist' : 'Songs', { url, mode: 'playlist', as_playlist: choice === 'playlist' });
         return;
       }
     }

@@ -6,7 +6,7 @@
   --accent:#ff6a3d; --accent2:#ffa24a; --on-accent:#1a0b04;
   --grad:linear-gradient(135deg,#ff6a3d,#ff9f43);
   --hue:#3a2418; --tint:#3a2418;
-  --sidew:250px; --dockh:76px;
+  --sidew:250px; --dockh:92px;
   --font:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
   --display:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",system-ui,sans-serif;
   color-scheme:dark;
@@ -267,7 +267,10 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 .disc::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 20deg,transparent 0 18%,rgba(255,255,255,.13) 25%,transparent 33% 68%,rgba(255,255,255,.1) 75%,transparent 83%)}
 .disc .label{position:absolute;inset:30%;border-radius:50%;background:var(--raise) center/cover;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 .disc .label::after{content:"";position:absolute;inset:40%;border-radius:50%;background:#0b0b0c}
-.dock-mid{display:grid;gap:5px;justify-items:center}
+.dock-mid{display:grid;gap:9px;justify-items:center;padding:4px 0}
+.modal .btns.stack{flex-direction:column;align-items:stretch}
+.modal .btns.stack .pill-btn,.modal .btns.stack .chip{padding:11px 18px;text-align:center}
+.modal .btns.stack .chip{background:none;color:var(--dim)}
 .ctrls{display:flex;align-items:center;gap:12px}
 .ctl{width:32px;height:32px;display:grid;place-items:center;color:var(--dim);border-radius:50%;position:relative}
 .ctl svg{width:19px;height:19px}
