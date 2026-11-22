@@ -12,10 +12,12 @@ Your songs, playlists and settings live in `%LOCALAPPDATA%\Vinyl`, so updates an
 
 ## Releasing a new version
 
-1. Bump `version` in `Cargo.toml`.
-2. `gh auth login` once, then `.\installer\release.ps1 -Notes "What's new"`.
+1. Bump `version` in `Cargo.toml` (and commit/push it).
+2. Create a release on GitHub with a tag that matches, e.g. `v0.0.2` for version `0.0.2` (or just push the tag).
 
-That runs `installer\build.ps1` (release build, then Inno Setup 6 → `dist\vinyl-setup.exe`) and publishes a release tagged `v<version>` with the installer attached. Install Inno Setup with `winget install JRSoftware.InnoSetup`.
+GitHub Actions (`.github/workflows/release.yml`) then builds `vinyl-setup.exe` and attaches it to that release, which is what installed copies look for when they check for updates. If the tag doesn't match `Cargo.toml` the build stops with a clear error. You can also run the workflow by hand for an existing tag from the Actions tab.
+
+To build locally instead: `.\installeruild.ps1` makes `distinyl-setup.exe` (needs Inno Setup 6: `winget install JRSoftware.InnoSetup`), and `.\installerelease.ps1` also publishes it with the `gh` CLI.
 
 ## Running from source
 

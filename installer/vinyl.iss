@@ -3,7 +3,7 @@
 ; settings live in %LOCALAPPDATA%\Vinyl and are left alone by updates and by the uninstaller.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "0.0.1"
 #endif
 
 [Setup]
