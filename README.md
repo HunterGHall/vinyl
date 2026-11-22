@@ -12,12 +12,13 @@ Your songs, playlists and settings live in `%LOCALAPPDATA%\Vinyl`, so updates an
 
 ## Releasing a new version
 
-1. Bump `version` in `Cargo.toml` (and commit/push it).
-2. Create a release on GitHub with a tag that matches, e.g. `v0.0.2` for version `0.0.2` (or just push the tag).
+1. Push your changes.
+2. Create a release on GitHub with a new version tag, e.g. `v0.0.2` (or just push the tag).
 
-GitHub Actions (`.github/workflows/release.yml`) then builds `vinyl-setup.exe` and attaches it to that release, which is what installed copies look for when they check for updates. If the tag doesn't match `Cargo.toml` the build stops with a clear error. You can also run the workflow by hand for an existing tag from the Actions tab.
+GitHub Actions (`.github/workflows/release.yml`) then builds `vinyl-setup.exe` and attaches it to that release, which is what installed copies look for when they check for updates. The version comes from the tag (`v0.0.2` builds version `0.0.2`), so there is nothing to bump in `Cargo.toml`; the build stops with a clear error if the tag isn't like `v1.2.3`. You can also run the workflow by hand for an existing tag from the Actions tab.
 
-To build locally instead: `.\installeruild.ps1` makes `distinyl-setup.exe` (needs Inno Setup 6: `winget install JRSoftware.InnoSetup`), and `.\installerelease.ps1` also publishes it with the `gh` CLI.
+To build locally instead: `.\installeruild.ps1` makes `distinyl-setup.exe` (needs Inno Setup 6: `winget install JRSoftware.InnoSetup`), and `.\installer
+elease.ps1` also publishes it with the `gh` CLI.
 
 ## Running from source
 

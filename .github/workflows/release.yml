@@ -2,7 +2,8 @@ name: Release
 
 # Pushing a tag like v0.0.2 (or creating a release with a new tag on GitHub) builds the Windows
 # installer and attaches vinyl-setup.exe to that release, which is what installed copies of
-# Vinyl look for when they check for updates. The tag must match `version` in Cargo.toml.
+# Vinyl look for when they check for updates. The version is taken from the tag (v0.0.2 -> 0.0.2),
+# so there is nothing to bump in Cargo.toml first.
 on:
   push:
     tags: ['v*']
@@ -26,12 +27,15 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
-      - name: Check the tag matches Cargo.toml
+      - name: Set the version from the tag
         shell: pwsh
         run: |
-          $version = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
-          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match Cargo.toml version $version. Bump the version, then tag again." }
+          $version = $env:TAG.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Tag $env:TAG is not a version like v1.2.3" }
+          # Only this build's copy of Cargo.toml changes; the repository is left as it is.
+          (Get-Content Cargo.toml -Raw) -replace '(?m)^version\s*=\s*"[^"]+"', "version = `"$version`"" | Set-Content Cargo.toml -NoNewline
           "Building Vinyl $version"
+          Select-String -Path Cargo.toml -Pattern '^version' | Select-Object -First 1
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
