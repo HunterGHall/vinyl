@@ -10,6 +10,7 @@ Your songs, playlists and settings live in `%LOCALAPPDATA%\Vinyl`, so updates an
 
 **Updates:** each time Vinyl starts it checks the latest GitHub release. If there is a newer version it asks whether to install it; saying yes downloads `vinyl-setup.exe`, verifies its SHA-256 against GitHub's, runs it, and Vinyl reopens updated. Settings has a "Check for updates" button.
 
+<<<<<<< HEAD
 ## Releasing a new version
 
 1. Push your changes.
@@ -29,6 +30,8 @@ cargo run --release -- --web  # just serve http://127.0.0.1:8735 (VINYL_PORT to 
 
 From a checkout, if the current folder already has `library\` or `data\`, Vinyl uses it; otherwise it uses `%LOCALAPPDATA%\Vinyl`. Set `MUSIC_HOME` to choose a folder. `MUSIC_DEV_STATIC=1` serves `static\` from disk. `VINYL_MEDIA_KEYS=1` also enables the media keys in `--web` mode (for testing). `VINYL_RELEASES_URL` points the updater at another releases endpoint (used for testing).
 
+=======
+>>>>>>> 8f77cbff8615b9462e6cd2e566ff51dca127dc9c
 ## What's in it
 
 - **Design**: sidebar with search, a floating player dock with a little spinning record, rounded covers, one orange accent.
