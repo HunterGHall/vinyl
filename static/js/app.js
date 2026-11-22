@@ -422,10 +422,12 @@ $('#seek').addEventListener('change', e => { if (audio.duration) audio.currentTi
 $('#b-queue').onclick = () => go(route.name === 'queue' ? '#/home' : '#/queue');
 $('#b-lyrics').onclick = () => { if (S.np && S.lyrics) S.np = false; else { S.np = true; S.lyrics = true; } applyNPState(); };
 $('#bar-track').addEventListener('click', e => { if (e.target.closest('.disc')) { S.np = !S.np; applyNPState(); } });
-$('#close-stage').onclick = () => { S.np = false; applyNPState(); };
+$('#nav-np').onclick = () => { S.np = !S.np; applyNPState(); };
+$('#close-stage').onclick =() => { S.np = false; applyNPState(); };
 $('#toggle-np').onclick = () => { S.np = !S.np; applyNPState(); };
 function applyNPState() {
   document.body.classList.toggle('stage-open', S.np);
+  $('#nav-np')?.classList.toggle('on', S.np);
   lsSet('vinyl.np', S.np); lsSet('vinyl.lyrics', S.lyrics); syncControls();
   if (S.np) { AsciiVinyl.start(() => !audio.paused); AsciiVinyl.setCover(P.cur?.cover); renderNP(); } else AsciiVinyl.stop();
 }

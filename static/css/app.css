@@ -44,6 +44,8 @@ img{display:block}
 .nav-link svg{width:20px;height:20px;color:var(--accent)}
 .nav-link:hover{background:var(--hover)}
 .nav-link.on{background:var(--raise)}
+.nav-btn{width:100%;text-align:left}
+.playing .nav-btn svg{animation:spin 4s linear infinite}
 .side-head{display:flex;align-items:center;justify-content:space-between;margin:20px 10px 6px;padding-right:2px;font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--dim);text-transform:uppercase}
 .side-head a:hover,.side-head a.on{color:var(--text)}
 .icon-btn{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:var(--dim)}
