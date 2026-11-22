@@ -347,3 +347,6 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
   .hero{gap:16px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.row .alb a:hover,.np-artist a:hover,.hero .meta a:hover{color:var(--text);text-decoration:underline}
+.np-artist a{color:var(--dim)}

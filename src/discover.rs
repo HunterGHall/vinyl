@@ -89,7 +89,7 @@ fn track_item(t: &Value, because: &str) -> Option<Value> {
         "preview": t["preview"],
         "because": because,
         "in_library": download::catalog_in_library(&key, artist, title),
-        "catalog": {"id": key, "title": title, "artist": artist, "duration": duration, "cover": cover_xl},
+        "catalog": {"id": key, "title": title, "artist": artist, "album": album["title"], "duration": duration, "cover": cover_xl},
     }))
 }
 

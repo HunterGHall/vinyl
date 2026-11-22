@@ -3,7 +3,7 @@
 use crate::library::*;
 use crate::store::{self, lock, paths};
 use crate::util::{clip, is_spotify_playlist_url, unquote};
-use crate::{deps, discover, download, lyrics, tools, update};
+use crate::{deps, discover, download, lyrics, mediakeys, tools, update};
 use serde_json::{Map, Value, json};
 use std::fs;
 use std::io::{Cursor, Read, Seek, SeekFrom};
@@ -393,6 +393,14 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
                 Err(e) => err(502, &e),
             }
         }
+        // ---- media keys (desktop window only): long-poll for key presses ----
+        (Method::Get, ["api", "media", "poll"]) => {
+            if !mediakeys::enabled() {
+                return ok(json!({"enabled": false, "keys": []}));
+            }
+            ok(json!({"enabled": true, "keys": mediakeys::wait(std::time::Duration::from_secs(20))}))
+        }
+
         // ---- download tools (yt-dlp, ffmpeg) ----
         (Method::Get, ["api", "deps"]) => ok(deps::status()),
         (Method::Post, ["api", "deps", "install"]) => json_resp(202, json!({"started": deps::install()})),
@@ -482,7 +490,8 @@ fn edit_track_meta(id: &str, body: &Value) -> Resp {
             if title.is_empty() {
                 return err(400, "Title required");
             }
-            meta[id] = json!({"title": title, "artist": artist});
+            let album = clip(body["album"].as_str().unwrap_or("").trim(), 200);
+            meta[id] = json!({"title": title, "artist": artist, "album": album, "album_checked": true});
         }
         save_meta(&meta);
         meta

@@ -14,6 +14,7 @@ mod deps;
 mod discover;
 mod download;
 mod library;
+mod mediakeys;
 mod lyrics;
 mod routes;
 mod spotify;
@@ -90,6 +91,7 @@ fn run_desktop() -> Result<(), String> {
 
     #[cfg(windows)]
     name_process_for_windows();
+    mediakeys::start();
 
     std::thread::spawn(|| {
         if let Err(e) = run_web() {
@@ -141,6 +143,9 @@ fn run_desktop() -> Result<(), String> {
 fn main() {
     store::init();
     let web_only = std::env::args().any(|a| a == "--web");
+    if web_only && std::env::var_os("VINYL_MEDIA_KEYS").is_some() {
+        mediakeys::start(); // testing aid: the desktop window starts this itself
+    }
     let result = if web_only { run_web() } else { run_desktop() };
     if let Err(e) = result {
         eprintln!("{e}");

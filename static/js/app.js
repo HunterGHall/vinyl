@@ -389,8 +389,8 @@ function syncControls() {
   $('#toggle-np').classList.toggle('on', S.np);
 }
 
-audio.addEventListener('play', () => { document.body.classList.add('playing'); document.body.classList.remove('paused'); $('#b-play').innerHTML = ICON.pause; $('#b-play').title = 'Pause'; });
-audio.addEventListener('pause', () => { document.body.classList.remove('playing'); document.body.classList.add('paused'); $('#b-play').innerHTML = ICON.play; $('#b-play').title = 'Play'; });
+audio.addEventListener('play', () => { try { navigator.mediaSession.playbackState = 'playing'; } catch { /* unsupported */ } document.body.classList.add('playing'); document.body.classList.remove('paused'); $('#b-play').innerHTML = ICON.pause; $('#b-play').title = 'Pause'; });
+audio.addEventListener('pause', () => { try { navigator.mediaSession.playbackState = 'paused'; } catch { /* unsupported */ } document.body.classList.remove('playing'); document.body.classList.add('paused'); $('#b-play').innerHTML = ICON.play; $('#b-play').title = 'Play'; });
 audio.addEventListener('ended', () => next(true));
 audio.addEventListener('error', () => { if (P.cur) { toast(`Couldn't play ${P.cur.title}`); setTimeout(() => next(true), 600); } });
 let seeking = false;
@@ -436,7 +436,7 @@ function mediaSession() {
   if (!('mediaSession' in navigator) || !P.cur) return;
   const t = P.cur;
   navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist, artwork: t.cover ? [{ src: new URL(t.cover, location.origin).href, sizes: '600x600', type: 'image/jpeg' }] : [] });
-  for (const [a, f] of [['play', () => audio.play()], ['pause', () => audio.pause()], ['nexttrack', () => next(false)], ['previoustrack', prev]]) { try { navigator.mediaSession.setActionHandler(a, f); } catch { /* unsupported */ } }
+  for (const [a, f] of [['play', () => audio.play()], ['pause', () => audio.pause()], ['nexttrack', () => next(false)], ['previoustrack', prev], ['stop', () => audio.pause()]]) { try { navigator.mediaSession.setActionHandler(a, f); } catch { /* unsupported */ } }
 }
 
 let saveTimer = 0;
@@ -507,7 +507,7 @@ function renderNP() {
   if (!t) { el.innerHTML = `<div class="np-head">Now playing</div><p class="note">Play something and the record spins up here, with its lyrics.</p>`; return; }
   el.innerHTML = `
     <div class="np-head">${esc(P.label || 'Now playing')}</div>
-    <div class="np-title"><div><div class="tt">${esc(t.title)}</div><div class="np-artist">${t.isPv ? esc(t.artist) : artistLink(t)}</div></div>${heartBtn(t.id)}</div>
+    <div class="np-title"><div><div class="tt">${esc(t.title)}</div><div class="np-artist">${t.isPv ? esc(t.artist) + (t.item?.album ? ' · ' + esc(t.item.album) : '') : artistLink(t) + (t.album ? ` · <a href="${albumHref(t)}">${esc(t.album)}</a>` : '')}</div></div>${heartBtn(t.id)}</div>
     ${t.isPv ? `<div class="pv-note">Downloading this song to your library. It starts playing as soon as it is ready.</div>` : ''}
     ${t.isPv ? '' : `<div class="np-sec grow"><h4>Lyrics <button data-act="refresh-lyrics">Reload</button></h4><div id="lyr" class="lyr plain"><p class="note">Loading lyrics…</p></div></div>`}`;
   if (!t.isPv) loadLyrics(t);
@@ -558,7 +558,7 @@ function rowHTML(id, i, key, { album = true, removeFrom = null, n = i + 1 } = {}
     return `<div class="row ${P.cur?.id === id ? 'now' : ''}" data-id="${esc(id)}" data-list="${key}" data-i="${i}">
       <div class="num"><span class="n">${n}</span><span class="eq"><i></i><i></i><i></i></span><svg class="p" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg></div>
       <div class="title">${artHTML(t)}<div class="txt"><div class="tt">${esc(t.title)}</div><div class="ta">${artistLink(t)}</div></div></div>
-      ${album ? `<div class="alb">${t.plays ? plural(t.plays, 'play') : 'Not played yet'}</div>` : ''}
+      ${album ? `<div class="alb">${t.album ? `<a href="${albumHref(t)}">${esc(t.album)}</a>` : ''}</div>` : ''}
       ${heartBtn(id)}
       <div class="dur">${fmt(t.duration)}</div>
       <button class="more" data-act="more" data-id="${esc(id)}" ${removeFrom ? `data-from="${esc(removeFrom)}"` : ''} aria-label="More options for ${esc(t.title)}">${ICON.more}</button>
@@ -572,13 +572,13 @@ const webRowHTML = (i, n, key, idx) => `<div class="row web-row ${P.cur?.id === 
 /* A list of not-yet-owned songs: playable as previews, each with an Add button. */
 function previewRows(items) {
   const ids = items.map(registerPv), key = regList(ids);
-  return `<div class="tl">${tlHead(true).replace('Plays', 'Album')}${items.map((it, i) => webRowHTML(it, i + 1, key, i)).join('')}</div>`;
+  return `<div class="tl">${tlHead(true)}${items.map((it, i) => webRowHTML(it, i + 1, key, i)).join('')}</div>`;
 }
-const tlHead = album => `<div class="tl-head"><div style="text-align:center">#</div><div>Title</div>${album ? '<div class="alb">Plays</div>' : ''}<div></div><div style="text-align:right">Time</div><div></div></div>`;
+const tlHead = album => `<div class="tl-head"><div style="text-align:center">#</div><div>Title</div>${album ? '<div class="alb">Album</div>' : ''}<div></div><div style="text-align:right">Time</div><div></div></div>`;
 function trackRows(ids, { album = true, removeFrom = null } = {}) {
   const key = regList(ids);
   const rows = ids.map((id, i) => rowHTML(id, i, key, { album, removeFrom })).join('');
-  return `<div class="tl ${album ? '' : 'no-album'}"><div class="tl-head"><div style="text-align:center">#</div><div>Title</div>${album ? '<div class="alb">Plays</div>' : ''}<div></div><div style="text-align:right">Time</div><div></div></div>${rows}</div>`;
+  return `<div class="tl ${album ? '' : 'no-album'}"><div class="tl-head"><div style="text-align:center">#</div><div>Title</div>${album ? '<div class="alb">Album</div>' : ''}<div></div><div style="text-align:right">Time</div><div></div></div>${rows}</div>`;
 }
 
 function card({ kind, key, art, title, sub, round = false, href = '', playKey = '' }) {
@@ -757,6 +757,24 @@ function actionsHTML(playKey, { menu = '' } = {}) {
 }
 const totalDur = ids => ids.reduce((s, id) => s + (trackOf(id)?.duration || 0), 0);
 
+/* ---- albums: songs grouped by artist + album name (names come from catalog downloads and a background lookup) ---- */
+const albumKey = t => akey(t) + '||' + t.album.toLowerCase();
+const albumHref = t => `#/album/${enc(albumKey(t))}`;
+function albums() {
+  if (S.cache.albums?.ver === S.ver) return S.cache.albums.list;
+  const m = new Map();
+  for (const t of S.tracks) {
+    if (!t.album) continue;
+    const k = albumKey(t);
+    (m.get(k) || m.set(k, { key: k, name: t.album, artist: primaryArtist(t.artist), tracks: [] }).get(k)).tracks.push(t);
+  }
+  const list = [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
+  S.cache.albums = { ver: S.ver, list };
+  return list;
+}
+const albumArt = a => artHTML(a.tracks.find(t => t.cover) || a.tracks[0]);
+const albumCard = a => card({ kind: 'album', key: a.key, art: albumArt(a), title: a.name, sub: `${a.artist} · ${plural(a.tracks.length, 'song')}`, playKey: 'album:' + a.key, href: `#/album/${enc(a.key)}` });
+
 function sourceIds(key) {
   const [kind, ...rest] = key.split(':'), arg = rest.join(':');
   switch (kind) {
@@ -764,6 +782,7 @@ function sourceIds(key) {
     case 'playlist': return (S.playlists.find(p => p.id === arg)?.track_ids || []).filter(id => S.by.has(id));
     case 'mix': { const m = mixes().find(x => String(x.n) === arg); return m ? mixIds(m) : []; }
     case 'artist': return (taste().byArtist.get(arg) || []).slice().sort((a, b) => (b.plays || 0) - (a.plays || 0) || a.title.localeCompare(b.title)).map(t => t.id);
+    case 'album': return (albums().find(a => a.key === arg)?.tracks || []).slice().sort((x, y) => x.title.localeCompare(y.title)).map(t => t.id);
     case 'track': return [arg];
     case 'all': return S.tracks.map(t => t.id);
     default: return [];
@@ -772,6 +791,7 @@ function sourceIds(key) {
 function sourceLabel(key) {
   const [kind, ...rest] = key.split(':'), arg = rest.join(':');
   if (kind === 'liked') return 'Liked Songs';
+  if (kind === 'album') return albums().find(a => a.key === arg)?.name || 'Album';
   if (kind === 'playlist') return S.playlists.find(p => p.id === arg)?.name || 'Playlist';
   if (kind === 'mix') return mixes().find(m => String(m.n) === arg)?.name || 'Mix';
   if (kind === 'artist') return taste().names.get(arg) || 'Artist';
@@ -919,6 +939,24 @@ async function autoAddNews(items, label) {
   }
 }
 
+function renderAlbums() {
+  const list = albums().slice().sort((a, b) => a.artist.localeCompare(b.artist) || a.name.localeCompare(b.name));
+  const unnamed = S.tracks.filter(t => !t.album).length;
+  $('#view').innerHTML = `<h1 class="big">Albums</h1>
+    <div class="statline">${list.length ? `<b>${list.length}</b> albums` : 'No album names yet'}${unnamed ? ` · looking up names for ${plural(unnamed, 'song')} in the background` : ''}</div>
+    ${list.length ? `<div class="grid open" style="margin-top:22px">${list.map(albumCard).join('')}</div>` : '<div class="empty"><b>Albums will appear here</b>Vinyl looks up album names for your songs in the background. Check back in a minute.</div>'}`;
+  $('#view').style.setProperty('--hue', '#3a2418');
+}
+
+function renderAlbum(key) {
+  const a = albums().find(x => x.key === key);
+  if (!a) { $('#view').innerHTML = `<div class="empty"><b>Album not found</b></div>`; return; }
+  const ids = sourceIds('album:' + key);
+  $('#view').innerHTML = `${heroHTML({ kind: 'Album', title: a.name, art: albumArt(a), meta: `<a href="#/artist/${enc(a.artist)}"><b>${esc(a.artist)}</b></a> · ${plural(ids.length, 'song')} · ${fmtLong(totalDur(ids))}` })}
+    ${actionsHTML('album:' + key)}${trackRows(ids, { album: false })}`;
+  tint(ids);
+}
+
 function renderArtist(name) {
   const k = name.toLowerCase(), T = taste(), ids = sourceIds('artist:' + k);
   if (!ids.length) { $('#view').innerHTML = `<div class="empty"><b>No songs by ${esc(name)}</b></div>`; return; }
@@ -953,7 +991,7 @@ function renderSearch() {
     return;
   }
   const lq = q.toLowerCase(), words = lq.split(/\s+/);
-  const hit = t => { const h = `${t.title} ${t.artist}`.toLowerCase(); return words.every(w => h.includes(w)); };
+  const hit = t => { const h = `${t.title} ${t.artist} ${t.album || ''}`.toLowerCase(); return words.every(w => h.includes(w)); };
   const songs = S.tracks.filter(hit).sort((a, b) => (b.plays || 0) - (a.plays || 0));
   const T = taste(), artists = [...T.byArtist.keys()].filter(k => words.every(w => (T.names.get(k) || '').toLowerCase().includes(w)));
   const pls = S.playlists.filter(p => words.every(w => p.name.toLowerCase().includes(w)));
@@ -969,6 +1007,7 @@ function renderSearch() {
       <div><div class="sect-title" style="margin-top:6px">Songs</div>${songs.length ? trackRows(songs.slice(0, 5).map(t => t.id), { album: false }).replace('<div class="tl-head">', '<div class="tl-head" hidden>') : '<div class="note">No matching songs in your library.</div>'}</div></div>` : `<div class="empty"><b>Nothing in your library for "${esc(q)}"</b>Try the catalog results below.</div>`}
     ${songs.length > 5 ? `<div class="sect-title">More songs</div>` + trackRows(songs.slice(5, 30).map(t => t.id)) : ''}
     ${artists.length ? shelf('Artists', '', artists.slice(0, 12).map(artistCard)) : ''}
+    ${(() => { const als = albums().filter(a => words.every(w => `${a.name} ${a.artist}`.toLowerCase().includes(w))); return als.length ? shelf('Albums', '', als.slice(0, 12).map(albumCard)) : ''; })()}
     ${pls.length ? shelf('Playlists', '', pls.map(playlistCard)) : ''}
     <div id="web-search"></div>`;
   view.style.setProperty('--hue', '#2d2a3a');
@@ -1291,7 +1330,7 @@ async function deleteTrack(t) {
 /* ------------------------------------------------------------------ router */
 
 let route = { name: 'home', arg: '' };
-const ROUTES = ['home', 'settings', 'playlists', 'search', 'library', 'liked', 'playlist', 'artist', 'mix', 'add', 'queue', 'discover', 'genre', 'dz'];
+const ROUTES = ['home', 'albums', 'album', 'settings', 'playlists', 'search', 'library', 'liked', 'playlist', 'artist', 'mix', 'add', 'queue', 'discover', 'genre', 'dz'];
 function parseHash() {
   const [, name = 'home', ...rest] = (location.hash || '#/home').split('/');
   const arg = decodeURIComponent(rest.join('/'));
@@ -1320,6 +1359,8 @@ function renderRoute(keepScroll) {
     case 'queue': renderQueue(); break;
     case 'playlists': renderPlaylists(); break;
     case 'settings': renderSettings(); break;
+    case 'albums': renderAlbums(); break;
+    case 'album': renderAlbum(route.arg); break;
     case 'discover': renderDiscover(); break;
     case 'genre': renderGenre(route.arg); break;
     case 'dz': renderDz(route.arg); break;
@@ -1456,6 +1497,26 @@ document.addEventListener('mouseover', e => { // seek bar gets the accent while 
 
 /* -------------------------------------------------------------------- boot */
 
+/* Keyboard media keys, also while Vinyl is in the background. The desktop app grabs them
+   system-wide and the server hands the presses over; in a browser this does nothing. */
+async function mediaKeyLoop() {
+  let idle = 0, errors = 0;
+  for (;;) {
+    try {
+      const r = await api('/api/media/poll');
+      errors = 0;
+      if (!r.enabled) { if (++idle >= 3) return; await new Promise(res => setTimeout(res, 2500)); continue; }
+      idle = 0;
+      for (const k of r.keys) {
+        if (k === 'play_pause') togglePlay();
+        else if (k === 'next') next(false);
+        else if (k === 'prev') prev();
+        else if (k === 'stop') audio.pause();
+      }
+    } catch { if (++errors >= 10) return; await new Promise(res => setTimeout(res, 3000)); }
+  }
+}
+
 (async function boot() {
   $('#b-play').innerHTML = ICON.play;
   document.body.classList.add('paused');
@@ -1465,9 +1526,10 @@ document.addEventListener('mouseover', e => { // seek bar gets the accent while 
   renderRoute(false);
   renderBarTrack();
   applyNPState();
+  mediaKeyLoop();
   setTimeout(() => checkForUpdate(), 2500); // ask GitHub whether there is a newer release
   setInterval(() => { // pick up songs added outside the app (downloads finishing, new files)
     if (document.hidden) return;
-    api('/api/library').then(ts => { if (ts.length !== S.tracks.length) loadAll().then(() => { renderLibrary(); if (route.name === 'home' || route.name === 'library') renderRoute(true); }); }).catch(() => { });
+    api('/api/library').then(ts => { const withAlbum = x => x.filter(t => t.album).length; if (ts.length !== S.tracks.length || withAlbum(ts) !== withAlbum(S.tracks)) loadAll().then(() => { renderLibrary(); if (['home', 'library', 'albums', 'album'].includes(route.name)) renderRoute(true); }); }).catch(() => { });
   }, 30000);
 })();

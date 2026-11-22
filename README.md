@@ -27,13 +27,15 @@ cargo run --release           # desktop window
 cargo run --release -- --web  # just serve http://127.0.0.1:8735 (VINYL_PORT to change)
 ```
 
-From a checkout, if the current folder already has `library\` or `data\`, Vinyl uses it; otherwise it uses `%LOCALAPPDATA%\Vinyl`. Set `MUSIC_HOME` to choose a folder. `MUSIC_DEV_STATIC=1` serves `static\` from disk. `VINYL_RELEASES_URL` points the updater at another releases endpoint (used for testing).
+From a checkout, if the current folder already has `library\` or `data\`, Vinyl uses it; otherwise it uses `%LOCALAPPDATA%\Vinyl`. Set `MUSIC_HOME` to choose a folder. `MUSIC_DEV_STATIC=1` serves `static\` from disk. `VINYL_MEDIA_KEYS=1` also enables the media keys in `--web` mode (for testing). `VINYL_RELEASES_URL` points the updater at another releases endpoint (used for testing).
 
 ## What's in it
 
 - **Design**: sidebar with search, a floating player dock with a little spinning record, rounded covers, one orange accent.
 - **Now Playing**: the record is rendered as live ASCII (ported from `../ascii-vinyl`, with its panel settings fixed: rotate on, 1.10 rad/s, clockwise, light 163 degrees, 1.00x, cover 300 px / radius 120 px, 5 px cells, classic characters, original colours), on a platter tinted by the cover, next to time-synced lyrics.
 - **Favorites**, **Daily Mixes**, **Discover** (Deezer related artists and genres), starting from nothing with genre picks, playlists, and **Settings** for resetting your data.
+- **Albums**: album names come from catalog downloads and are looked up in the background for everything else (iTunes). The Albums page groups your songs, songs show their album, and search finds albums.
+- **Media keys**: play/pause, next, previous and stop work system-wide, even when Vinyl is in the background (the desktop app registers them; if another app already owns them, the browser's media session is used).
 - Songs from Discover download first, then play from your library.
 
 Shortcuts: `Space` play/pause, `Ctrl+←/→` previous/next, `←/→` seek 5 s, `L` like, `S` shuffle, `/` search, `Esc` closes Now Playing.

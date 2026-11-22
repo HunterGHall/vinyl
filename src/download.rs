@@ -377,7 +377,7 @@ pub fn search_catalog(query: &str) -> Result<Vec<Value>, String> {
             "thumbnail": art.replace("100x100bb", "200x200bb"),
             "in_library": catalog_existing(&key, artist, title).is_some(),
             "catalog": {
-                "id": key, "title": title, "artist": artist, "duration": duration,
+                "id": key, "title": title, "artist": artist, "album": r["collectionName"], "duration": duration,
                 "cover": art.replace("100x100bb", "600x600bb"),
             },
         }));
@@ -441,6 +441,9 @@ fn download_catalog(item: &Value, job: &Job) -> Result<(PathBuf, String, bool), 
         std::fs::rename(&downloaded, &final_path).map_err(|e| e.to_string())?;
     }
     remember_real_names(&final_path, &title, &artist);
+    if let Some(album) = item["album"].as_str().filter(|a| !a.trim().is_empty()) {
+        library::remember_album(&final_path, album);
+    }
     if let Some(cover) = item["cover"].as_str().filter(|c| !c.is_empty()) {
         download_image(cover, &cover_path_for(&final_path));
     }
@@ -484,6 +487,7 @@ pub fn start_catalog(item: Value) -> String {
             }
         }
         library::scan_loudness_async();
+        library::backfill_albums_async();
         lyrics::prefetch_async(new_ids);
     });
     id
@@ -646,6 +650,7 @@ pub fn start(url: String, mode: String, as_playlist: bool) -> String {
             });
         }
         library::scan_loudness_async(); // measure whatever was just added
+        library::backfill_albums_async();
         lyrics::prefetch_async(new_ids); // retries any lookups that failed while offline
     });
     id

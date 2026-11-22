@@ -184,6 +184,10 @@ pub fn flush_durations() {
 /// Saves newly measured lengths shortly after they appear.
 pub fn start_background_tasks() {
     std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(8));
+        backfill_albums_async();
+    });
+    std::thread::spawn(|| {
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3));
             flush_durations();
@@ -387,6 +391,7 @@ pub fn track_to_dict(path: &Path, stats: &Value, loudness: &Value, meta: &Value)
         "artist": artist,
         "duration": track_duration(path),
         "cover": cover_url(path),
+        "album": meta[&name]["album"].as_str().unwrap_or(""),
         "plays": stats[&name].as_i64().unwrap_or(0),
         "added": mtime(path).unwrap_or(0.0),
     })
@@ -596,4 +601,113 @@ pub fn delete_tracks(track_ids: &[String]) -> usize {
         }
     }
     deleted
+}
+
+// ---------------- albums ----------------
+// Album names live in the metadata file next to title/artist. Catalog downloads know theirs;
+// everything else is looked up once on the iTunes catalog in the background ("album_checked"
+// stops a song that has no match being looked up again).
+
+pub fn remember_album(path: &Path, album: &str) {
+    let album = album.trim();
+    if album.is_empty() {
+        return;
+    }
+    let _g = lock();
+    let mut meta = load_meta();
+    let name = file_name(path);
+    if !meta[&name].is_object() {
+        meta[&name] = json!({"auto": true});
+    }
+    meta[&name]["album"] = json!(album);
+    meta[&name]["album_checked"] = json!(true);
+    save_meta(&meta);
+}
+
+fn mark_album_checked(name: &str) {
+    let _g = lock();
+    let mut meta = load_meta();
+    if !meta[name].is_object() {
+        meta[name] = json!({"auto": true});
+    }
+    meta[name]["album_checked"] = json!(true);
+    save_meta(&meta);
+}
+
+/// "Boston - Single" / "Boston - EP" -> "Boston" (a single's own name is a fine album name).
+fn clean_album(name: &str) -> String {
+    let n = name.trim();
+    for suffix in [" - Single", " - EP"] {
+        if let Some(base) = n.strip_suffix(suffix) {
+            return base.trim().to_string();
+        }
+    }
+    n.to_string()
+}
+
+fn lookup_album(title: &str, artist: &str, duration: f64) -> Option<String> {
+    let term = format!("{artist} {title}");
+    let url = format!("https://itunes.apple.com/search?media=music&entity=song&limit=8&term={}", util::quote_all(term.trim()));
+    let text = util::http_get_text(&url, 12, 2).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    let (want_title, want_artist) = (words(&crate::lyrics::clean_title(title)), words(&crate::lyrics::first_artist(artist)));
+    let mut best: Option<(f64, String)> = None;
+    for r in v["results"].as_array()? {
+        let (Some(t), Some(a), Some(album)) = (r["trackName"].as_str(), r["artistName"].as_str(), r["collectionName"].as_str()) else { continue };
+        if words(&crate::lyrics::clean_title(t)) != want_title {
+            continue;
+        }
+        let ra = words(a);
+        if !want_artist.is_empty() && !ra.contains(&want_artist) && !want_artist.contains(&ra) {
+            continue;
+        }
+        let diff = if duration > 0.0 { (r["trackTimeMillis"].as_f64().unwrap_or(0.0) / 1000.0 - duration).abs() } else { 0.0 };
+        if diff > 15.0 {
+            continue;
+        }
+        if best.as_ref().is_none_or(|(d, _)| diff < *d) {
+            best = Some((diff, clean_album(album)));
+        }
+    }
+    best.map(|(_, a)| a).filter(|a| !a.is_empty())
+}
+
+static ALBUMS_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Looks up the album of every song that doesn't have one yet, politely, one at a time.
+pub fn backfill_albums_async() {
+    if ALBUMS_RUNNING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(|| {
+        // Songs added while this runs are picked up by going round again until nothing is left.
+        loop {
+            let todo: Vec<(PathBuf, String, String)> = {
+                let meta = load_meta();
+                find_track_paths()
+                    .into_iter()
+                    .filter(|p| !meta[file_name(p)]["album_checked"].as_bool().unwrap_or(false) && meta[file_name(p)]["album"].as_str().is_none_or(str::is_empty))
+                    .map(|p| {
+                        let (t, a) = name_fields(&p, &meta);
+                        (p, t, a)
+                    })
+                    .collect()
+            };
+            if todo.is_empty() {
+                break;
+            }
+            for (path, title, artist) in todo {
+                if !path.is_file() {
+                    mark_album_checked(&file_name(&path));
+                    continue;
+                }
+                match lookup_album(&title, &artist, track_duration(&path)) {
+                    Some(album) => remember_album(&path, &album),
+                    None => mark_album_checked(&file_name(&path)),
+                }
+                std::thread::sleep(std::time::Duration::from_millis(450));
+            }
+        }
+        ALBUMS_RUNNING.store(false, Ordering::SeqCst);
+    });
 }
