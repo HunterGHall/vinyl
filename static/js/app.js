@@ -603,7 +603,9 @@ let shelfN = 0;
 function shelf(title, sub, cards, id, cls = '') {
   if (!cards.length) return '';
   shelfN++;
-  return `<section class="shelf ${cls}"><div class="shelf-head"><div><h2><i>${String(shelfN).padStart(2, '0')}</i>${esc(title)}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div><button data-act="toggle-shelf" aria-expanded="false">Show all</button></div><div class="grid" ${id ? `id="${id}"` : ''}>${cards.join('')}</div></section>`;
+  return `<section class="shelf ${cls}"><div class="shelf-head"><div><h2><i>${String(shelfN).padStart(2, '0')}</i>${esc(title)}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>${cls.includes('scroll')
+    ? `<div class="arrows"><button data-act="scroll-shelf" data-dir="-1" aria-label="Scroll left">&#8249;</button><button data-act="scroll-shelf" data-dir="1" aria-label="Scroll right">&#8250;</button></div>`
+    : `<button data-act="toggle-shelf" aria-expanded="false">Show all</button>`}</div><div class="grid" ${id ? `id="${id}"` : ''}>${cards.join('')}</div></section>`;
 }
 
 const greeting = () => { const h = new Date().getHours(); return h < 5 ? 'Late night vibes' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
@@ -695,7 +697,7 @@ const mixIds = m => mixEntries(m).map(e => e.id || registerPv(e.web));
 /* "New music for you" is computed once and kept for a while, so the shelf never reshuffles under you. */
 let recsLoading = null;
 function recsShelf(r) {
-  return shelf('New Music', `From artists like ${r.seeds.join(', ')}. Click to download and play.`, r.items.map(webCard));
+  return shelf('New Music', `From artists like ${r.seeds.join(', ')}. Click to download and play.`, r.items.map(webCard), '', 'scroll');
 }
 async function loadWebRecs() {
   const box = $('#web-recs'); if (!box) return;
@@ -1379,6 +1381,7 @@ document.addEventListener('click', async e => {
       case 'sort': S.sort = d.sort; lsSet('vinyl.sort', S.sort); renderRoute(true); return;
       case 'clear-queue': P.userQ = []; renderRoute(true); renderNP(); saveStateSoon(); return;
       case 'refresh-lyrics': if (P.cur) loadLyrics(P.cur, true); return;
+      case 'scroll-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); g.scrollBy({ left: +d.dir * Math.max(240, g.clientWidth * 0.85), behavior: 'smooth' }); return; }
       case 'toggle-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); const open = g.classList.toggle('open'); actEl.textContent = open ? 'Show less' : 'Show all'; actEl.setAttribute('aria-expanded', open); return; }
       case 'add-to-pl': await addToPlaylist(d.pid, [d.id]); actEl.textContent = 'Added'; actEl.disabled = true; actEl.classList.add('done'); return;
       case 'add-catalog': {

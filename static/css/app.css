@@ -88,6 +88,13 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 .grid.open{grid-auto-rows:auto;overflow:visible}
 .shelf.picks .grid{grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:22px}
 .shelf.picks .artw .art{aspect-ratio:4/5;border-radius:14px}
+/* a row you scroll sideways instead of expanding */
+.shelf.scroll .grid{display:flex;gap:18px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 14px;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
+.shelf.scroll .grid::-webkit-scrollbar{height:8px}
+.shelf.scroll .card{flex:0 0 172px;scroll-snap-align:start}
+.arrows{display:flex;gap:6px}
+.arrows button{width:30px;height:30px;border-radius:50%;background:var(--surface);font-size:20px;line-height:1;display:grid;place-items:center;color:var(--text)}
+.arrows button:hover{background:var(--raise)}
 .card{display:block;text-align:left;min-width:0;cursor:pointer}
 .artw{position:relative;margin-bottom:10px}
 .artw .art{width:100%;height:auto;aspect-ratio:1;font-size:42px;border-radius:10px;box-shadow:0 8px 22px rgba(0,0,0,.4);transition:transform .2s,box-shadow .2s}
