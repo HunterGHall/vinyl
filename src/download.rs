@@ -7,7 +7,7 @@ use crate::library::{
 };
 use crate::store::{self, paths};
 use crate::util::{self, download_image, is_spotify_playlist_url, is_spotify_url, sanitize_filename};
-use crate::{lyrics, spotify};
+use crate::{deps, lyrics, spotify};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
@@ -109,6 +109,7 @@ fn run_ytdlp(target: &str, job: Option<&Job>) -> Result<Value, String> {
         .args(["--no-warnings", "--newline", "--progress", "--no-simulate", "--no-playlist"])
         .args(["-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "192", "-o"])
         .arg(&template)
+        .args(deps::find("ffmpeg").and_then(|p| p.parent().map(|d| ["--ffmpeg-location".to_string(), d.to_string_lossy().into_owned()])).unwrap_or_default())
         .args([
             "--progress-template",
             "download:PROG\t%(progress.status)s\t%(progress.downloaded_bytes)s\t%(progress.total_bytes)s\t%(progress.total_bytes_estimate)s\t%(info.title)s",
@@ -120,7 +121,7 @@ fn run_ytdlp(target: &str, job: Option<&Job>) -> Result<Value, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Couldn't run yt-dlp ({e}) - is it installed and on PATH?"))?;
+        .map_err(|e| deps::friendly(&format!("Couldn't run yt-dlp ({e})")))?;
 
     let stderr = child.stderr.take().unwrap();
     let err_thread = std::thread::spawn(move || {
@@ -159,6 +160,7 @@ fn run_ytdlp(target: &str, job: Option<&Job>) -> Result<Value, String> {
             .find(|l| l.contains("ERROR"))
             .map(|l| l.trim_start_matches("ERROR: ").to_string())
             .or_else(|| errors.last().cloned())
+            .map(|e| deps::friendly(&e))
             .unwrap_or_else(|| format!("yt-dlp failed ({status})"))),
     }
 }

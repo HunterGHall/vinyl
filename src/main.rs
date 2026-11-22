@@ -10,6 +10,7 @@
 //!
 //! The library and data live in `$MUSIC_HOME` (default: the current directory).
 
+mod deps;
 mod discover;
 mod download;
 mod library;

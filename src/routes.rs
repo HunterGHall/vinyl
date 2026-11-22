@@ -3,7 +3,7 @@
 use crate::library::*;
 use crate::store::{self, lock, paths};
 use crate::util::{clip, is_spotify_playlist_url, unquote};
-use crate::{discover, download, lyrics, tools, update};
+use crate::{deps, discover, download, lyrics, tools, update};
 use serde_json::{Map, Value, json};
 use std::fs;
 use std::io::{Cursor, Read, Seek, SeekFrom};
@@ -393,6 +393,10 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
                 Err(e) => err(502, &e),
             }
         }
+        // ---- download tools (yt-dlp, ffmpeg) ----
+        (Method::Get, ["api", "deps"]) => ok(deps::status()),
+        (Method::Post, ["api", "deps", "install"]) => json_resp(202, json!({"started": deps::install()})),
+
         // ---- app updates ----
         (Method::Get, ["api", "update"]) => match update::check() {
             Ok(v) => ok(v),

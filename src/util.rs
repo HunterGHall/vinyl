@@ -71,18 +71,18 @@ pub fn command(program: &str) -> Command {
         c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     c.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
-    // yt-dlp and ffmpeg installed with winget land in its Links folder, which an app that was
-    // started before the install doesn't have on PATH yet.
-    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-        let links = std::path::Path::new(&local).join("Microsoft").join("WinGet").join("Links");
-        if links.is_dir() {
-            let mut paths: Vec<std::path::PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
-            if !paths.contains(&links) {
-                paths.push(links);
-                if let Ok(joined) = std::env::join_paths(paths) {
-                    c.env("PATH", joined);
-                }
+    // yt-dlp and ffmpeg are often installed where an app started from the Start menu doesn't look
+    // (winget's folders, Chocolatey, Scoop...), so add the places that hold them to its PATH.
+    let extra = crate::deps::extra_dirs();
+    if !extra.is_empty() {
+        let mut paths: Vec<std::path::PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
+        for d in extra {
+            if !paths.contains(&d) {
+                paths.push(d);
             }
+        }
+        if let Ok(joined) = std::env::join_paths(paths) {
+            c.env("PATH", joined);
         }
     }
     c

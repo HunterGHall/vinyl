@@ -803,7 +803,7 @@ async function checkForUpdate({ manual = false } = {}) {
   catch (e) { if (manual) toast(e.message); return null; }
   S.update = info;
   if (!info.available) { if (manual) toast(`You're up to date (Vinyl ${info.current})`); return info; }
-  const notes = String(info.notes || '').trim().split('\n').slice(0, 8).join('\n');
+  const notes = String(info.notes || '').replace(/\*\*|__|`/g, '').split('\n').filter(l => l.trim() && !/^full changelog/i.test(l.trim())).slice(0, 8).join('\n');
   const yes = await modal({ title: 'Update available', text: `Vinyl ${info.latest} is ready. You have ${info.current}.${notes ? '\n\n' + notes : ''}`, ok: 'Install and restart', cancel: 'Not now' });
   if (yes) installUpdate();
   return info;
@@ -833,12 +833,16 @@ function renderSettings() {
     <section class="shelf"><div class="shelf-head"><div><h2>Updates</h2><div class="sub">Vinyl checks for a new version each time it starts</div></div></div>
       <div class="set-row"><div><b>Version</b><div class="note" id="upd-ver">Checking…</div></div><button class="pill-btn ghost" data-act="check-update">Check for updates</button></div>
     </section>
+    <section class="shelf"><div class="shelf-head"><div><h2>Download tools</h2><div class="sub">Vinyl uses yt-dlp to download songs and ffmpeg to convert them</div></div></div>
+      <div class="set-row"><div><b>Status</b><div class="note" id="deps-status">Checking…</div></div><button class="pill-btn ghost" id="deps-btn" data-act="install-deps" hidden>Install missing tools</button></div>
+    </section>
     <section class="shelf"><div class="shelf-head"><div><h2>Your data</h2><div class="sub">Everything lives in the data and library folders next to the app</div></div></div>
       <div class="set-row"><div><b>Reset recommendations</b><div class="note">Clears liked songs, listening history and play counts. Your songs and playlists stay.</div></div><button class="pill-btn ghost" data-act="reset-recs">Reset</button></div>
       <div class="set-row"><div><b>Delete all playlists</b><div class="note">Removes every playlist. Songs stay in the library.</div></div><button class="pill-btn ghost" data-act="delete-playlists">Delete</button></div>
       <div class="set-row"><div><b>Delete everything</b><div class="note">Deletes every song file, playlist, like and the listening history. This cannot be undone.</div></div><button class="pill-btn danger" data-act="delete-all">Delete everything</button></div>
     </section>`;
   $('#view').style.setProperty('--hue', '#1a120d');
+  refreshDeps();
   api('/api/update/status').then(st => { const el = $('#upd-ver'); if (el) el.textContent = `Vinyl ${st.current}${S.update ? (S.update.available ? ` · ${S.update.latest} is available` : ' · up to date') : ''}`; }).catch(() => { });
 }
 async function wipe(kind) {
@@ -982,9 +986,31 @@ function renderAdd() {
     <div class="note" style="margin-top:6px;max-width:560px">Paste a YouTube or Spotify link for a song or a whole playlist, or search the catalog from the search bar and press Add.</div>
     <div class="drop"><input class="field" id="add-url" placeholder="https://…" aria-label="Link" style="flex:1;min-width:240px">
       <button class="pill-btn" data-act="add-url" data-mode="track">Add song</button><button class="pill-btn ghost" data-act="add-url" data-mode="playlist">Add playlist</button></div>
+    <div id="deps-banner"></div>
     <div class="jobs" id="jobs"></div><div id="web-recs"></div>`;
   $('#view').style.setProperty('--hue', '#2f3a2a');
-  renderJobs(); loadWebRecs();
+  renderJobs(); loadWebRecs(); refreshDeps();
+}
+
+/* yt-dlp / ffmpeg: show whether they are installed, and install them with winget if not. */
+let depsTimer = 0;
+async function refreshDeps() {
+  let d;
+  try { d = await api('/api/deps'); } catch { return; }
+  const missing = [!d.yt_dlp && 'yt-dlp', !d.ffmpeg && 'ffmpeg'].filter(Boolean);
+  const st = $('#deps-status'), btn = $('#deps-btn'), banner = $('#deps-banner');
+  const text = d.installing ? 'Installing… this can take a minute.'
+    : missing.length ? `Missing: ${missing.join(' and ')}.${d.error ? ' ' + d.error : ''}${d.winget ? '' : ' winget was not found, so install them by hand.'}`
+    : 'yt-dlp and ffmpeg are installed.';
+  if (st) st.textContent = text;
+  if (btn) { btn.hidden = !missing.length || !d.winget; btn.disabled = d.installing; btn.textContent = d.installing ? 'Installing…' : 'Install missing tools'; }
+  if (banner) {
+    banner.innerHTML = missing.length ? `<div class="start"><h2>Vinyl needs ${missing.join(' and ')} to add music</h2><p>${esc(text)}</p>${d.winget && !d.installing ? '<div class="drop"><button class="pill-btn" data-act="install-deps">Install now</button></div>' : ''}</div>` : '';
+  }
+  clearTimeout(depsTimer);
+  if (d.installing) depsTimer = setTimeout(refreshDeps, 2000);
+  else if (S.depsWas && !missing.length) toast('Download tools are ready');
+  S.depsWas = d.installing;
 }
 function renderJobs() {
   const box = $('#jobs'); if (!box) return;
@@ -1313,6 +1339,7 @@ document.addEventListener('click', async e => {
       case 'play-card': playSource(d.play); return;
       case 'shuffle-card': playSource(d.play, { shuffle: true }); return;
       case 'play-ids': playSource(d.key); return;
+      case 'install-deps': { try { await api('/api/deps/install', { method: 'POST' }); } catch (e) { toast(e.message); return; } S.depsWas = true; refreshDeps(); return; }
       case 'check-update': { const i = await checkForUpdate({ manual: true }); const el = $('#upd-ver'); if (el && i) el.textContent = `Vinyl ${i.current}${i.available ? ` · ${i.latest} is available` : ' · up to date'}`; return; }
       case 'reset-recs': wipe('recs'); return;
       case 'delete-playlists': wipe('playlists'); return;
