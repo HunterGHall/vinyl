@@ -2,7 +2,7 @@
 
 use crate::library::*;
 use crate::base::store::{self, lock, paths};
-use crate::base::util::{clip, is_spotify_playlist_url, unquote};
+use crate::base::util::{clip, unquote};
 use crate::system::{deps, mediakeys, update};
 use crate::music::{discover, download, lyrics};
 use crate::library::tools;
@@ -246,7 +246,7 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
             }
             match serde_json::from_slice::<Value>(cx.body) {
                 Ok(v) if v.is_object() => {
-                    let _ = store::write_json(&p.player_state, &v, false, false);
+                    let _ = store::write_json(&p.player_state, &v, true, false);
                     empty(204)
                 }
                 _ => err(400, "Object required"),
@@ -254,28 +254,6 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
         }
         (Method::Get, ["api", "settings"]) => ok(load_settings()),
         (Method::Post, ["api", "settings"]) => update_settings(&b()),
-
-        // ---- spotify watch ----
-        (Method::Get, ["api", "sync"]) => {
-            let (url, state) = {
-                let _g = lock();
-                (load_settings()["spotify_sync_url"].as_str().unwrap_or("").to_string(), tools::load_sync())
-            };
-            if url.is_empty() || state["url"].as_str() != Some(&url) {
-                ok(json!({"url": url, "pending": [], "last_checked": null, "error": null}))
-            } else {
-                ok(json!({"url": url, "pending": state["pending"].as_array().cloned().unwrap_or_default(),
-                          "last_checked": state["last_checked"], "error": state["error"]}))
-            }
-        }
-        (Method::Post, ["api", "sync", "check"]) => {
-            tools::wake_sync();
-            empty(204)
-        }
-        (Method::Post, ["api", "sync", id, "resolve"]) => {
-            tools::resolve_pending(id);
-            empty(204)
-        }
 
         // ---- playlists ----
         (Method::Get, ["api", "playlists"]) => {
@@ -593,13 +571,6 @@ fn update_settings(body: &Value) -> Resp {
     let number = |key: &str| body[key].as_f64().or_else(|| body[key].as_str().and_then(|x| x.trim().parse().ok()));
     if let Some(sec) = number("crossfade_seconds").filter(|v| (1.0..=12.0).contains(v)) {
         s["crossfade_seconds"] = json!(sec);
-    }
-    if let Some(url) = body["spotify_sync_url"].as_str() {
-        let url = url.trim();
-        if url.is_empty() || (is_spotify_playlist_url(url) && url.contains("open.spotify.com")) {
-            s["spotify_sync_url"] = json!(url);
-            tools::wake_sync();
-        }
     }
     save_settings(&s);
     ok(s)

@@ -11,11 +11,10 @@ use regex_lite::Regex;
 use serde_json::{Value, json};
 use sha1::{Digest, Sha1};
 use std::cmp::Reverse;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::Path;
-use std::sync::{Condvar, LazyLock, Mutex};
-use std::time::Duration;
+use std::sync::LazyLock;
 
 // ---------------- finding duplicates ----------------
 // Two kinds: byte-identical files (whatever they're called), and the same song
@@ -384,139 +383,4 @@ pub fn start_name_scan() -> String {
         }
     });
     id
-}
-
-// ---------------- spotify playlist watch ----------------
-// Every SYNC_INTERVAL seconds the watched Spotify playlist is re-read. Any track
-// that isn't in the library and hasn't been seen before becomes "pending" and
-// the UI asks whether to add it. The first read after choosing a playlist only
-// records what's already there, so you aren't asked about its whole backlog.
-
-const SYNC_INTERVAL: Duration = Duration::from_secs(60);
-static SYNC_WAKE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
-
-pub fn wake_sync() {
-    *SYNC_WAKE.0.lock().unwrap_or_else(|e| e.into_inner()) = true;
-    SYNC_WAKE.1.notify_all();
-}
-
-pub fn load_sync() -> Value {
-    store::read_obj(&paths().sync)
-}
-
-fn save_sync(state: &Value) {
-    save(&paths().sync, state);
-}
-
-/// One pass over the watched playlist. Network work happens outside the lock.
-fn sync_check() {
-    let url = load_settings()["spotify_sync_url"].as_str().unwrap_or("").to_string();
-    if url.is_empty() {
-        return;
-    }
-    let (track_urls, error) = match spotify::fetch_playlist_tracks(&url) {
-        Ok((_, urls)) if urls.is_empty() => (vec![], Some("Could not read any tracks from that playlist.".to_string())),
-        Ok((_, urls)) => (urls, None),
-        Err(e) => {
-            store::warn(format!("Spotify sync: couldn't read the playlist: {e}"));
-            (vec![], Some(format!("Could not reach Spotify: {e}")))
-        }
-    };
-
-    let (first_run, mut seen, pending, sources) = {
-        let _g = lock();
-        let mut state = load_sync();
-        if state["url"].as_str() != Some(&url) {
-            state = json!({"url": url});
-        }
-        state["last_checked"] = json!(store::now());
-        state["error"] = json!(error);
-        save_sync(&state);
-        if error.is_some() {
-            return;
-        }
-        let first_run = state.get("seen").is_none();
-        let seen = state["seen"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(String::from)).collect::<BTreeSet<_>>();
-        let pending = state["pending"].as_array().cloned().unwrap_or_default();
-        (first_run, seen, pending, load_sources())
-    };
-
-    let ids: Vec<&str> = track_urls.iter().map(|u| u.rsplit('/').next().unwrap_or("")).collect();
-    let mut new_ids: Vec<&str> = Vec::new();
-    if first_run {
-        seen.extend(ids.iter().map(|s| s.to_string()));
-    } else {
-        let queued: HashSet<&str> = pending.iter().filter_map(|p| p["id"].as_str()).collect();
-        for tid in ids {
-            if seen.contains(tid) || queued.contains(tid) {
-                continue;
-            }
-            let downloaded = sources[format!("spotify:{tid}")].as_str().is_some_and(|n| paths().library.join(n).is_file());
-            if downloaded {
-                seen.insert(tid.to_string()); // already downloaded some other way
-            } else {
-                new_ids.push(tid);
-            }
-        }
-    }
-
-    let found: Vec<Value> = new_ids
-        .iter()
-        .map(|tid| {
-            let track_url = format!("https://open.spotify.com/track/{tid}");
-            let (title, artist, cover) = spotify::fetch_track_metadata(&track_url).unwrap_or_else(|e| {
-                store::warn(format!("Spotify sync: no metadata for {tid}: {e}"));
-                (String::new(), String::new(), None)
-            });
-            json!({"id": tid, "url": track_url,
-                   "title": if title.is_empty() { "Unknown title".to_string() } else { title },
-                   "artist": artist, "cover": cover})
-        })
-        .collect();
-
-    let _g = lock();
-    let mut state = load_sync();
-    if state["url"].as_str() != Some(&url) {
-        return; // playlist changed while we were reading; next pass starts over
-    }
-    let mut all_seen: BTreeSet<String> =
-        state["seen"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(String::from)).collect();
-    all_seen.extend(seen);
-    state["seen"] = json!(all_seen);
-    let mut pending_now = state["pending"].as_array().cloned().unwrap_or_default();
-    let known: HashSet<String> = pending_now.iter().filter_map(|p| p["id"].as_str().map(String::from)).collect();
-    pending_now.extend(found.into_iter().filter(|f| !known.contains(f["id"].as_str().unwrap_or(""))));
-    state["pending"] = Value::Array(pending_now);
-    state["last_checked"] = json!(store::now());
-    state["error"] = Value::Null;
-    save_sync(&state);
-}
-
-pub fn start_sync_thread() {
-    std::thread::spawn(|| {
-        loop {
-            if std::panic::catch_unwind(sync_check).is_err() {
-                store::error("Spotify sync failed");
-            }
-            let (flag, cv) = &SYNC_WAKE;
-            let guard = flag.lock().unwrap_or_else(|e| e.into_inner());
-            let (mut guard, _) = cv
-                .wait_timeout_while(guard, SYNC_INTERVAL, |woken| !*woken)
-                .unwrap_or_else(|e| e.into_inner());
-            *guard = false;
-        }
-    });
-}
-
-/// Takes a pending track off the list (it was added, or the user skipped it).
-pub fn resolve_pending(track_id: &str) {
-    let _g = lock();
-    let mut state = load_sync();
-    let pending: Vec<Value> = state["pending"].as_array().cloned().unwrap_or_default().into_iter().filter(|p| p["id"] != track_id).collect();
-    state["pending"] = Value::Array(pending);
-    let mut seen: BTreeSet<String> =
-        state["seen"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(String::from)).collect();
-    seen.insert(track_id.to_string());
-    state["seen"] = json!(seen);
-    save_sync(&state);
 }

@@ -25,7 +25,6 @@ pub struct Paths {
     pub history: PathBuf,
     pub settings: PathBuf,
     pub sources: PathBuf,
-    pub sync: PathBuf,
     pub loudness: PathBuf,
     pub meta: PathBuf,
     pub player_state: PathBuf,
@@ -74,7 +73,6 @@ pub fn init() -> &'static Paths {
             history: data.join("history.jsonl"), // one JSON object per line, appended to on every play
             settings: data.join("settings.json"),
             sources: data.join("sources.json"),
-            sync: data.join("spotify_sync.json"),
             loudness: data.join("loudness.json"),
             meta: data.join("metadata.json"),
             player_state: data.join("player_state.json"),

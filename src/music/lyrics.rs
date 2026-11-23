@@ -257,7 +257,7 @@ pub fn lyrics_for(path: &Path, refresh: bool) -> Result<Value, String> {
     let _g = lock();
     // a fresh lookup may be a different edit, so any saved timing nudge starts over
     let entry = json!({"query": query, "fetched": store::now(), "offset": 0, "result": result});
-    if let Err(e) = store::write_json(&cache_file, &entry, false, false) {
+    if let Err(e) = store::write_json(&cache_file, &entry, true, false) {
         store::warn(format!("Couldn't cache lyrics: {e}"));
     }
     Ok(with_offset(entry["result"].clone(), json!(0)))
@@ -272,7 +272,7 @@ pub fn save_offset(track_id: &str, offset: f64) -> Result<(), String> {
         .and_then(|t| serde_json::from_str(&t).ok())
         .ok_or("No lyrics saved for this song")?;
     cached["offset"] = json!(offset);
-    store::write_json(&cache_file, &cached, false, false).map_err(|e| e.to_string())
+    store::write_json(&cache_file, &cached, true, false).map_err(|e| e.to_string())
 }
 
 /// Fetches (and caches) a freshly downloaded song's lyrics as part of its

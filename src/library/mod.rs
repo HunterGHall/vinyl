@@ -524,7 +524,6 @@ fn default_settings() -> Map<String, Value> {
         "transition_mode": "gapless",   // off | gapless | crossfade
         "crossfade_seconds": 5,
         "lyrics_enabled": true,
-        "spotify_sync_url": "",         // Spotify playlist watched for new songs ("" = off)
     }) else { unreachable!() };
     m
 }

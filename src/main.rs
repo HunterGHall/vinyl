@@ -28,7 +28,6 @@ mod system;
 use base::store;
 #[cfg(all(feature = "desktop", windows))]
 use base::util;
-use library::tools;
 use server::routes;
 use system::mediakeys;
 
@@ -42,7 +41,6 @@ fn port() -> u16 {
 fn run_web() -> Result<(), String> {
     library::start_background_tasks();
     library::scan_loudness_async();
-    tools::start_sync_thread();
     routes::serve(port())
 }
 
@@ -119,7 +117,7 @@ impl SavedWindow {
     }
     fn save(&self) {
         let v = serde_json::json!({"x": self.x, "y": self.y, "w": self.w, "h": self.h, "maximized": self.maximized});
-        let _ = std::fs::write(Self::path(), v.to_string());
+        let _ = std::fs::write(Self::path(), serde_json::to_string_pretty(&v).unwrap_or_default());
     }
 }
 
