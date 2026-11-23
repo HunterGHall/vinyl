@@ -24,7 +24,6 @@ Your own songs on Windows, with Daily Mixes, new music from similar artists, and
   <a href="#install">Install</a> ·
   <a href="#features">Features</a> ·
   <a href="#running-from-source">Running from source</a> ·
-  <a href="#releasing-a-new-version">Releasing</a> ·
   <a href="https://github.com/HunterGHall/vinyl/releases">Releases</a>
 </p>
 
