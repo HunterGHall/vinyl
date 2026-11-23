@@ -6,6 +6,13 @@
 <title>Vinyl</title>
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="stylesheet" href="/css/app.css">
+<script>
+// Before anything else: start loading last time's cover and open the stage in last time's colour.
+try {
+  var t = localStorage.getItem('vinyl.tint'); if (t) document.documentElement.style.setProperty('--tint', JSON.parse(t));
+  var c = JSON.parse(localStorage.getItem('vinyl.cover') || 'null'); if (c) { var i = new Image(); i.crossOrigin = 'anonymous'; i.src = c; }
+} catch (e) { /* no storage: nothing to restore */ }
+</script>
 </head>
 <body class="paused">
 <div class="winbar" id="winbar">

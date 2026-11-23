@@ -5,7 +5,7 @@
   --text:#f4f4f6; --dim:#a1a1a9; --faint:#6d6d76;
   --accent:#ff6a3d; --accent2:#ffa24a; --on-accent:#1a0b04;
   --grad:linear-gradient(135deg,#ff6a3d,#ff9f43);
-  --hue:#3a2418; --tint:#3a2418;
+  --hue:#2c2c2f; --tint:#2c2c2f;
   --sidew:250px; --dockh:92px;
   --font:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
   --display:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",system-ui,sans-serif;
@@ -374,3 +374,20 @@ body.desktop .stage{top:32px}
 .wincontrols .close:hover{background:#e81123;color:#fff}
 .wincontrols .i-rest,body.maxed .wincontrols .i-max{display:none}
 body.maxed .wincontrols .i-rest{display:block}
+
+/* ---- images fade in instead of popping in; the ones already cached show straight away ---- */
+.art-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .28s ease}
+.art-img.in{opacity:1}
+.art-img.nofade{transition:none}
+.mosaic>div{position:relative;overflow:hidden}
+#ascii{opacity:0;transition:opacity .45s ease}
+#ascii.ready{opacity:1}
+
+/* ---- placeholder shown the very first time, before there is anything cached to paint ---- */
+.skel{padding-top:4px}
+.skel-title{width:220px;height:34px;border-radius:10px;margin:2px 0 26px}
+.skel-title.small{width:160px;height:22px;margin:34px 0 16px}
+.skel-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:20px 18px}
+.skel-card{aspect-ratio:1;border-radius:10px}
+.skel-title,.skel-card{background:linear-gradient(100deg,rgba(255,255,255,.05) 30%,rgba(255,255,255,.11) 50%,rgba(255,255,255,.05) 70%);background-size:300% 100%;animation:shimmer 1.4s ease-in-out infinite}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 
-pub const AUDIO_EXTS: [&str; 7] = ["mp3", "wav", "m4a", "flac", "ogg", "opus", "aac"];
+pub const AUDIO_EXTS: [&str; 7] = ["mp3", "wav", "m4a", "flac", "ogg", "opus", "aac"]; // all extensions avalible
 pub const TRANSITION_MODES: [&str; 3] = ["off", "gapless", "crossfade"];
 const TARGET_LUFS: f64 = -14.0; // what every track is levelled to (streaming-service norm)
 
@@ -70,7 +70,7 @@ pub fn cover_path_for(audio: &Path) -> PathBuf {
 pub fn cover_url(audio: &Path) -> Value {
     let cover = cover_path_for(audio);
     if cover.is_file() {
-        json!(format!("/covers/{}", quote(&file_name(&cover))))
+        json!(format!("/covers/{}?v={}", quote(&file_name(&cover)), mtime(&cover).unwrap_or(0.0) as i64))
     } else {
         Value::Null
     }
@@ -183,6 +183,9 @@ pub fn flush_durations() {
 
 /// Saves newly measured lengths shortly after they appear.
 pub fn start_background_tasks() {
+    // Read every song's length now, while the window is still opening, so the first request for the
+    // library doesn't have to wait for ffprobe.
+    std::thread::spawn(|| warm_durations(&find_track_paths()));
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(8));
         backfill_albums_async();

@@ -44,7 +44,7 @@ const ICON = {
 const S = {
   tracks: [], by: new Map(), likes: new Map(), history: [], playlists: [],
   ver: 0, cache: {}, lists: {}, sort: lsGet('vinyl.sort', 'added'), libFilter: 'all',
-  q: '', web: new Map(), pv: new Map(), webItems: {}, picked: new Set(), jobs: [], np: lsGet('vinyl.np', false), lyrics: lsGet('vinyl.lyrics', true),
+  recs: lsGet('vinyl.recs', null), q: '', web: new Map(), pv: new Map(), webItems: {}, picked: new Set(), jobs: [], np: lsGet('vinyl.np', false), lyrics: lsGet('vinyl.lyrics', true),
 };
 const P = { order: [], pos: -1, ctx: [], userQ: [], shuffle: false, repeat: 'off', cur: null, recorded: false, vol: 70, label: '' };
 const audio = $('#audio');
@@ -75,17 +75,27 @@ function toast(msg) {
 
 /* ------------------------------------------------------------------ data */
 
-async function loadAll() {
+async function fetchData() {
   const [tracks, likes, history, playlists] = await Promise.all([
     api('/api/library'), api('/api/likes').catch(() => []), api('/api/history').catch(() => []), api('/api/playlists').catch(() => []),
   ]);
-  S.tracks = tracks;
-  S.by = new Map(tracks.map(t => [t.id, t]));
-  S.likes = new Map(likes.filter(l => S.by.has(l.id)).map(l => [l.id, l.at]));
-  S.history = history.filter(h => S.by.has(h.id));
-  S.playlists = playlists;
+  return { tracks, likes, history, playlists };
+}
+function applyData(d) {
+  S.tracks = d.tracks;
+  S.by = new Map(d.tracks.map(t => [t.id, t]));
+  S.likes = new Map(d.likes.filter(l => S.by.has(l.id)).map(l => [l.id, l.at]));
+  S.history = d.history.filter(h => S.by.has(h.id));
+  S.playlists = d.playlists;
   S.ver++;
 }
+async function loadAll() {
+  const d = await fetchData();
+  applyData(d);
+  lsSet('vinyl.data', d); // the next start paints from this while the server is still answering
+}
+/* What you can see on screen: if this hasn't changed since the cached copy, there is nothing to redraw. */
+const dataSig = d => JSON.stringify([d.tracks.map(t => [t.id, t.title, t.artist, t.album, t.cover]), d.likes.map(l => l.id), d.playlists.map(p => [p.id, p.name, p.track_ids, p.cover])]);
 
 async function refreshPlaylists() { S.playlists = await api('/api/playlists'); S.ver++; renderLibrary(); }
 
@@ -107,7 +117,7 @@ async function toggleLike(id, force) {
 function hueOf(t) { return hash32((t.artist || '') + (t.title || '')) % 360; }
 function artHTML(t, cls = '') {
   if (!t) return `<div class="art ${cls}"></div>`;
-  if (t.cover) return `<div class="art ${cls}" style="background-image:url('${esc(t.cover)}')"></div>`;
+  if (t.cover) return `<div class="art ${cls}"><img class="art-img" src="${esc(t.cover)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('in')" onerror="this.remove()"></div>`;
   const h = hueOf(t);
   return `<div class="art ${cls}" style="background:linear-gradient(135deg,hsl(${h} 45% 34%),hsl(${(h + 50) % 360} 50% 20%))"><span class="ph">${esc((t.title || '?').trim().charAt(0).toUpperCase())}</span></div>`;
 }
@@ -115,8 +125,16 @@ function mosaicHTML(ids, cls = '') {
   const ts = ids.map(trackOf).filter(Boolean);
   if (!ts.length) return `<div class="art ${cls}"></div>`;
   if (ts.length < 4) return artHTML(ts[0], cls);
-  return `<div class="art ${cls}"><div class="mosaic">${ts.slice(0, 4).map(t => `<div style="${t.cover ? `background-image:url('${esc(t.cover)}')` : `background:hsl(${hueOf(t)} 40% 28%)`}"></div>`).join('')}</div></div>`;
+  return `<div class="art ${cls}"><div class="mosaic">${ts.slice(0, 4).map(t => t.cover ? `<div><img class="art-img" src="${esc(t.cover)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('in')" onerror="this.remove()"></div>` : `<div style="background:hsl(${hueOf(t)} 40% 28%)"></div>`).join('')}</div></div>`;
 }
+new MutationObserver(muts => {
+  for (const m of muts) for (const n of m.addedNodes) {
+    if (n.nodeType !== 1) continue;
+    for (const img of (n.matches?.('img.art-img') ? [n] : n.querySelectorAll?.('img.art-img') || [])) {
+      if (img.complete && img.naturalWidth) img.classList.add('in', 'nofade');
+    }
+  }
+}).observe(document.body, { childList: true, subtree: true });
 const likedArt = cls => `<div class="art liked ${cls}">${ICON.heartFill}</div>`;
 
 const colorCache = new Map();
@@ -325,7 +343,8 @@ function loadTrack(id, autoplay, resumeAt = 0) {
   const t = trackOf(id); if (!t) return;
   P.cur = t; P.recorded = !!t.isPv;
   AsciiVinyl.setCover(t.cover);
-  coverColor(t.cover, 1.05).then(c => $('#stage').style.setProperty('--tint', c || '#3a2418'));
+  lsSet('vinyl.cover', t.cover || null);
+  coverColor(t.cover, 1.05).then(c => { $('#stage').style.setProperty('--tint', c || '#2c2c2f'); if (c) lsSet('vinyl.tint', c); });
   if (t.isPv) { // not in the library yet: download it, then play the real file
     audio.pause(); audio.removeAttribute('src');
     renderBarTrack(); renderNP(); markNow();
@@ -446,14 +465,15 @@ function saveStateSoon(gap = 800) {
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = 0;
-    api('/api/state', { method: 'POST', body: { version: 2, currentId: P.cur?.id || null, position: audio.currentTime || 0, queue: P.ctx.slice(0, 500), upNext: P.userQ, shuffle: P.shuffle, repeat: P.repeat, label: P.label } }).catch(() => { });
+    const body = { version: 2, currentId: P.cur?.id || null, position: audio.currentTime || 0, queue: P.ctx.slice(0, 500), upNext: P.userQ, shuffle: P.shuffle, repeat: P.repeat, label: P.label };
+    lsSet('vinyl.state', body);
+    api('/api/state', { method: 'POST', body }).catch(() => { });
   }, gap);
 }
 
-async function restoreState() {
+function restoreFrom(st) {
   P.vol = lsGet('vinyl.vol', 70);
-  try {
-    const st = await api('/api/state');
+  if (st) {
     P.shuffle = !!st.shuffle; P.repeat = ['off', 'all', 'one'].includes(st.repeat) ? st.repeat : 'off';
     P.label = st.label || '';
     const ctx = (st.queue || []).filter(id => S.by.has(id));
@@ -465,7 +485,7 @@ async function restoreState() {
       P.userQ = (st.upNext || []).filter(id => S.by.has(id) && id !== cur);
       loadTrack(cur, false, st.position || 0);
     }
-  } catch { /* first run */ }
+  }
   applyVolume(); syncControls();
 }
 
@@ -665,7 +685,7 @@ function freshFrom(results, n) {
   return stash(roundRobin(lists.map(l => l.items), n));
 }
 const mixKey = m => m.name + '|' + m.artists.join();
-S.mixNews = {};
+S.mixNews = lsGet('vinyl.mixNews', {});
 let mixNewsBusy = false;
 async function ensureMixNews() {
   if (mixNewsBusy) return; mixNewsBusy = true;
@@ -677,6 +697,7 @@ async function ensureMixNews() {
       const items = freshFrom(res, 10);
       if (!items.length && res.some(r => !r || r.complete === false)) continue; // try again next time
       S.mixNews[key] = items;
+      lsSet('vinyl.mixNews', S.mixNews);
       changed = true;
     }
   } finally { mixNewsBusy = false; }
@@ -698,27 +719,34 @@ const mixIds = m => mixEntries(m).map(e => e.id || registerPv(e.web));
 
 /* "New music for you" is computed once and kept for a while, so the shelf never reshuffles under you. */
 let recsLoading = null;
+const recsIds = r => r.items.filter(i => !owned(i)).map(i => i.id).join('|');
 function recsShelf(r) {
-  return shelf('New Music', `From artists like ${r.seeds.join(', ')}. Click to download and play.`, r.items.map(webCard), '', 'scroll');
+  const items = r.items.filter(i => !owned(i));
+  return items.length ? shelf('New Music', `From artists like ${r.seeds.join(', ')}. Click to download and play.`, items.map(webCard), '', 'scroll') : '';
 }
 async function loadWebRecs() {
   const box = $('#web-recs'); if (!box) return;
+  if (S.recs?.items) stash(S.recs.items);
   const fresh = S.recs && Date.now() - S.recs.at < 20 * 60000;
-  if (fresh) { if (S.recs.items.length) box.innerHTML = recsShelf(S.recs); return; }
-  box.style.minHeight = '340px'; // hold the space so nothing jumps when it arrives
+  if (S.recs?.items?.length) { box.innerHTML = recsShelf(S.recs); box.dataset.ids = recsIds(S.recs); } // last time's picks, instantly
+  else box.style.minHeight = '340px'; // hold the space so nothing jumps when it arrives
+  if (fresh) { box.style.minHeight = ''; return; }
   if (!recsLoading) {
     recsLoading = (async () => {
       const T = taste(), seeds = T.top.slice(0, 3).map(k => T.names.get(k)).filter(Boolean);
       if (!seeds.length) return;
       const res = await Promise.all(seeds.map(a => similarFor(a, 6, 2)));
       const items = freshFrom(res, 12);
-      if (items.length || !res.some(r => !r || r.complete === false)) S.recs = { at: Date.now(), seeds, items };
+      if (items.length || !res.some(r => !r || r.complete === false)) { S.recs = { at: Date.now(), seeds, items }; lsSet('vinyl.recs', S.recs); }
     })().finally(() => { recsLoading = null; });
   }
   await recsLoading;
   const now = $('#web-recs'); if (!now) return;
   now.style.minHeight = '';
-  if (S.recs?.items.length && ['home', 'add', 'discover'].includes(route.name)) now.innerHTML = recsShelf(S.recs);
+  // only redraw if the picks really changed, so a refresh in the background doesn't flicker
+  if (S.recs?.items.length && ['home', 'add', 'discover'].includes(route.name) && now.dataset.ids !== recsIds(S.recs)) {
+    now.innerHTML = recsShelf(S.recs); now.dataset.ids = recsIds(S.recs);
+  }
 }
 const webCard = i => `<div class="card" data-kind="web" data-key="${esc(i.id)}"><div class="artw"><div class="art " style="background-image:url('${esc(i.thumbnail)}')"></div><button class="go" data-act="play-pv" data-key="${esc(i.id)}" aria-label="Play ${esc(i.title)}">${ICON.play}</button></div><div class="t">${esc(i.title)}</div><div class="s"><span class="tagnew">NEW</span> ${esc(i.artist)}${i.because ? ' · like ' + esc(i.because) : ''}</div><button class="add-btn" style="margin-top:8px;min-width:0;padding:4px 10px" data-act="add-catalog" data-key="${esc(i.id)}">+ Add</button></div>`;
 const dzArtistCard = a => card({ kind: 'dz', key: a.id, art: `<div class="art " style="background-image:url('${esc(a.picture)}')"></div>`, title: a.name, sub: a.fans ? `${Math.round(a.fans / 1000).toLocaleString()}k fans` : 'Artist', round: true, href: `#/dz/${a.id}` });
@@ -1541,15 +1569,36 @@ async function mediaKeyLoop() {
   }
 }
 
+const skeletonHTML = () => `<div class="skel"><div class="skel-title"></div><div class="skel-row">${'<div class="skel-card"></div>'.repeat(4)}</div><div class="skel-title small"></div><div class="skel-row">${'<div class="skel-card"></div>'.repeat(6)}</div></div>`;
+
 (async function boot() {
   $('#b-play').innerHTML = ICON.play;
   document.body.classList.add('paused');
-  try { await loadAll(); }
-  catch (e) { $('#view').innerHTML = `<div class="empty"><b>Can't reach the Vinyl server</b>${esc(e.message)}</div>`; return; }
-  await restoreState();
-  renderRoute(false);
-  renderBarTrack();
-  applyNPState();
+  if (S.recs?.items) stash(S.recs.items);
+  Object.values(S.mixNews).forEach(stash);
+
+  // 1. Paint at once from what was on screen last time (the server may take a moment to answer).
+  const cached = lsGet('vinyl.data', null);
+  let painted = false;
+  const firstPaint = state => {
+    restoreFrom(state);
+    renderRoute(false);
+    renderBarTrack();
+    applyNPState();
+    painted = true;
+  };
+  if (cached?.tracks) { applyData(cached); firstPaint(lsGet('vinyl.state', null)); }
+  else $('#view').innerHTML = skeletonHTML();
+
+  // 2. Ask the server for the real data and the saved player state, in parallel.
+  let fresh, serverState = null;
+  try { [fresh, serverState] = await Promise.all([fetchData(), api('/api/state').catch(() => null)]); }
+  catch (e) { if (!painted) $('#view').innerHTML = `<div class="empty"><b>Can't reach the Vinyl server</b>${esc(e.message)}</div>`; return; }
+  lsSet('vinyl.data', fresh);
+  if (!painted) { applyData(fresh); firstPaint(serverState || lsGet('vinyl.state', null)); }
+  else if (dataSig(fresh) !== dataSig(cached)) { applyData(fresh); renderLibrary(); renderRoute(true); renderBarTrack(); }
+  else applyData(fresh); // same on screen: just refresh the numbers (plays, durations) without redrawing
+
   mediaKeyLoop();
   setTimeout(() => checkForUpdate(), 2500); // ask GitHub whether there is a newer release
   setInterval(() => { // pick up songs added outside the app (downloads finishing, new files)

@@ -28,12 +28,20 @@ const AsciiVinyl = (() => {
   const stops = [[0, 0], [0.07, 0.05], [0.17, 0.62], [0.25, 0.36], [0.33, 0.05], [0.48, 0], [0.60, 0.08], [0.70, 0.62], [0.77, 0.85], [0.85, 0.30], [0.93, 0.05], [1, 0]];
 
   let cover = null; // HTMLImageElement of the current artwork (null -> the built-in label art)
+  let coverUrl, coverPending = false, pendingSince = 0, drawn = false;
+  // The record is not drawn while the right cover is still loading, and the previous cover stays on it
+  // until the new one is ready: the built-in label art only ever shows for songs that have no cover.
   function setCover(url) {
-    cover = null;
-    if (!url) return;
+    url = url || null;
+    if (url === coverUrl) return;
+    coverUrl = url;
+    if (!url) { cover = null; coverPending = false; return; }
+    coverPending = true; pendingSince = performance.now();
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { if (probe(img)) cover = img; };
+    const done = ok => { if (coverUrl !== url) return; cover = ok && probe(img) ? img : null; coverPending = false; };
+    img.onload = () => done(true);
+    img.onerror = () => done(false);
     img.src = url;
   }
   function probe(img) { // cross-origin art without CORS headers would taint the canvas
@@ -120,6 +128,7 @@ const AsciiVinyl = (() => {
     if (!running) return;
     requestAnimationFrame(frame);
     if (now - lastDraw < 30) return; // ~30 fps is plenty for ASCII and keeps the CPU calm
+    if (coverPending && now - pendingSince < 1500) return; // wait for the cover instead of showing the wrong art
     lastDraw = now;
     const dt = Math.min(0.1, (now - tPrev) / 1000); tPrev = now;
     if (cfg.spin && isPlaying()) ang += dt * cfg.speed * +cfg.dir;
@@ -145,6 +154,7 @@ const AsciiVinyl = (() => {
         octx.fillText(ramp[idx], i * cw + cw / 2, j * ch + ch / 2);
       }
     }
+    if (!drawn) { drawn = true; out.classList.add('ready'); } // fade the record in once it has its cover
   }
 
   function start(playingFn) { isPlaying = playingFn; if (running) return; running = true; tPrev = performance.now(); requestAnimationFrame(frame); }

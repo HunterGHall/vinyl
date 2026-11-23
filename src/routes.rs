@@ -89,13 +89,18 @@ fn parse_range(header: &str, len: u64) -> Option<(u64, u64)> {
 }
 
 /// Serves a file, honouring `Range` requests (needed for seeking in audio).
-fn serve_file(path: &Path, range: Option<&str>, no_store: bool) -> Resp {
+/// Cover art URLs carry `?v=<modified time>`, so a changed cover is a new URL and the old one can be kept forever.
+const CACHE_FOREVER: &str = "public, max-age=31536000, immutable";
+const CACHE_REVALIDATE: &str = "no-cache";
+const CACHE_NEVER: &str = "no-store, must-revalidate";
+
+fn serve_file(path: &Path, range: Option<&str>, cache: &str) -> Resp {
     let Ok(mut file) = fs::File::open(path) else { return not_found() };
     let Ok(len) = file.metadata().map(|m| m.len()) else { return not_found() };
     let mut headers = vec![
         hdr("Content-Type", mime_for(path)),
         hdr("Accept-Ranges", "bytes"),
-        hdr("Cache-Control", if no_store { "no-store, must-revalidate" } else { "no-cache" }),
+        hdr("Cache-Control", cache),
     ];
     let (status, start, count) = match range {
         Some(r) => match parse_range(r, len) {
@@ -166,12 +171,12 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
     match (method, segs.as_slice()) {
         // ---- static + media ----
         (Method::Get, [""]) => static_resp("index.html", cx),
-        (Method::Get, ["covers", rest @ ..]) => under(&p.covers, rest).map_or_else(not_found, |f| serve_file(&f, None, false)),
+        (Method::Get, ["covers", rest @ ..]) => under(&p.covers, rest).map_or_else(not_found, |f| serve_file(&f, None, CACHE_FOREVER)),
         (Method::Get, ["playlist-covers", rest @ ..]) => {
-            under(&p.playlist_covers, rest).map_or_else(not_found, |f| serve_file(&f, None, false))
+            under(&p.playlist_covers, rest).map_or_else(not_found, |f| serve_file(&f, None, CACHE_FOREVER))
         }
         (Method::Get, ["audio", name]) => match safe_track_path(name) {
-            Some(f) if f.is_file() => serve_file(&f, cx.range, false),
+            Some(f) if f.is_file() => serve_file(&f, cx.range, CACHE_REVALIDATE),
             _ => not_found(),
         },
 
@@ -448,7 +453,7 @@ fn static_resp(rel: &str, cx: &Ctx) -> Resp {
         let segs: Vec<&str> = rel.split('/').collect();
         return under(&paths().static_dir, &segs)
             .filter(|f| f.is_file())
-            .map_or_else(not_found, |f| serve_file(&f, None, true));
+            .map_or_else(not_found, |f| serve_file(&f, None, CACHE_NEVER));
     }
     let key = format!("/{rel}");
     let Some((_, gz, etag)) = embedded::ASSETS.iter().find(|(p, _, _)| *p == key) else { return not_found() };
