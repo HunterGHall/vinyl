@@ -932,7 +932,7 @@ function renderPlaylist(id) {
   const pl = S.playlists.find(p => p.id === id);
   if (!pl) { $('#view').innerHTML = `<div class="empty"><b>Playlist not found</b></div>`; return; }
   const ids = sourceIds('playlist:' + id);
-  const menu = `<button class="ghost-btn" data-act="playlist-menu" data-id="${esc(id)}" aria-label="More options">${ICON.more}</button>`;
+  const menu = `<button class="ghost-btn" data-act="playlist-menu" data-id="${esc(id)}" aria-label="More options">${ICON.more}</button><button class="pill-btn ghost" data-act="add-songs" data-pl="${esc(id)}">+ Add songs</button>`;
   let recs = '';
   if (ids.length) {
     const seeds = new Map();
@@ -1013,8 +1013,10 @@ function renderLibrary_() {
   const ids = ts.map(t => t.id);
   $('#view').innerHTML = `<h1 class="big">Your songs</h1><div class="meta note" style="margin-top:6px">${plural(ids.length, 'song')} · ${fmtLong(totalDur(ids))}</div>
     <div class="actions" style="margin-top:10px"><button class="go lg" data-act="play-ids" data-key="all" aria-label="Play all">${ICON.play}</button>
+    <button class="pill-btn" data-act="add-songs">+ Add songs</button>
     ${Object.entries(sorts).map(([k, v]) => `<button class="chip ${S.sort === k ? 'on' : ''}" data-act="sort" data-sort="${k}">${v}</button>`).join('')}</div>
-    ${ids.length ? trackRows(ids) : `<div class="empty"><b>No songs yet</b><button class="pill-btn" data-act="goto-add">Add music</button></div>`}`;
+    <div class="note" style="margin-bottom:6px">Drag songs or folders in from your computer, or drag a song onto a playlist in the sidebar. Ctrl or Shift click selects several. <a href="#/add" style="text-decoration:underline">Add from a link</a></div>
+    ${ids.length ? trackRows(ids) : `<div class="empty"><b>No songs yet</b><div class="drop" style="justify-content:center"><button class="pill-btn" data-act="add-songs">Add songs from this computer</button><button class="pill-btn ghost" data-act="goto-add">Add from a link</button></div></div>`}`;
   $('#view').style.setProperty('--hue', '#3a2a22');
 }
 
@@ -1181,32 +1183,79 @@ async function onSort(kind, from, to) {
     catch { toast("Couldn't save the new order"); await refreshPlaylists(); }
   }
 }
-(function enableSort() {
-  let drag = null, timer = 0, lastY = 0;
+/* ---- carrying songs: drop them on a playlist in the sidebar, on Liked Songs, on Queue or on "+" ---- */
+const DROP_TARGETS = '.lib-item[data-pl], .nav-link[data-nav="liked"], .nav-link[data-nav="queue"], [data-act="new-playlist"]';
+const dropTargetAt = (x, y) => document.elementFromPoint(x, y)?.closest(DROP_TARGETS) || null;
+async function likeMany(ids) {
+  const todo = ids.filter(id => !isLiked(id));
+  if (!todo.length) { toast('Already in Liked Songs'); return; }
+  todo.forEach(id => S.likes.set(id, Date.now() / 1000));
+  S.ver++; syncHearts(); renderLibrary();
+  try {
+    await Promise.all(todo.map(id => api(`/api/likes/${enc(id)}`, { method: 'PUT' })));
+    toast(todo.length > 1 ? `${todo.length} songs added to Liked Songs` : 'Added to Liked Songs');
+  } catch { todo.forEach(id => S.likes.delete(id)); syncHearts(); toast("Couldn't update Liked Songs"); }
+  if (route.name === 'liked') renderRoute(true);
+}
+async function dropSongs(target, ids) {
+  if (target.matches('.lib-item[data-pl]')) await addToPlaylist(target.dataset.pl, ids);
+  else if (target.matches('[data-nav="liked"]')) await likeMany(ids);
+  else if (target.matches('[data-nav="queue"]')) queueEnd(ids);
+  else if (target.matches('[data-act="new-playlist"]')) { const pl = await newPlaylist(); if (pl) await addToPlaylist(pl.id, ids); }
+}
+
+/* One drag system for the lists: rows in a sortable list reorder (line shows where), and any song row
+   (selected rows travel together) can be carried to a drop target in the sidebar. */
+(function enableDrag() {
+  let drag = null, timer = 0, lastX = 0, lastY = 0, hover = null;
   const edge = 56; // px from the edge of the scroll area where dragging starts to scroll it
-  const stop = () => { clearInterval(timer); document.body.classList.remove('dragging-rows'); drag?.line?.remove(); drag?.item.classList.remove('dragging'); };
+  const clearHover = () => { hover?.classList.remove('drop-target'); hover = null; };
+  const stop = () => {
+    clearInterval(timer); clearHover(); document.body.classList.remove('dragging-rows');
+    drag?.line?.remove(); drag?.ghost?.remove(); drag?.item.classList.remove('dragging');
+  };
   document.addEventListener('mousedown', e => {
     if (e.button !== 0 || e.target.closest('button:not(.lib-item),a,input,select,textarea')) return;
-    const item = e.target.closest('[data-sort] > .row, [data-sort] > .lib-item'); if (!item) return;
-    drag = { item, box: item.parentElement, kind: item.parentElement.dataset.sort, startY: e.clientY, started: false };
-    drag.from = [...drag.box.querySelectorAll(SORT_ITEMS)].indexOf(item);
+    const item = e.target.closest('[data-sort] > .row, [data-sort] > .lib-item, .tl > .row');
+    if (!item || item.classList.contains('web-row')) return;
+    const kind = item.parentElement.dataset.sort || null;
+    const carry = item.matches('.row') && !!item.dataset.id && !item.dataset.id.startsWith('pv:');
+    drag = { item, box: item.parentElement, kind, carry, startX: e.clientX, startY: e.clientY, started: false };
+    drag.from = kind ? [...drag.box.querySelectorAll(SORT_ITEMS)].indexOf(item) : -1;
   });
   document.addEventListener('mousemove', e => {
     if (!drag) return;
-    lastY = e.clientY;
+    lastX = e.clientX; lastY = e.clientY;
     if (!drag.started) {
-      if (Math.abs(e.clientY - drag.startY) < 6) return;
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 6) return;
       drag.started = true; drag.item.classList.add('dragging'); document.body.classList.add('dragging-rows');
-      drag.line = document.createElement('div'); drag.line.className = 'drop-line'; document.body.append(drag.line);
-      drag.scroller = drag.box.closest('.view, .lib-list');
-      timer = setInterval(() => { // keep scrolling while the pointer rests near an edge
-        const r = drag.scroller?.getBoundingClientRect(); if (!r) return;
-        if (lastY < r.top + edge) drag.scroller.scrollTop -= 14; else if (lastY > r.bottom - edge) drag.scroller.scrollTop += 14;
-        place(lastY);
-      }, 30);
+      if (drag.kind) {
+        drag.line = document.createElement('div'); drag.line.className = 'drop-line'; document.body.append(drag.line);
+        drag.scroller = drag.box.closest('.view, .lib-list');
+      }
+      if (drag.carry) { // which songs travel: the selected rows, if this row is one of them
+        const sel = [...document.querySelectorAll('.row.sel')].filter(r => r.dataset.id && !r.dataset.id.startsWith('pv:'));
+        drag.ids = sel.includes(drag.item) && sel.length > 1 ? [...new Set(sel.map(r => r.dataset.id))] : [drag.item.dataset.id];
+        drag.ghost = document.createElement('div'); drag.ghost.className = 'drag-ghost';
+        drag.ghost.textContent = drag.ids.length > 1 ? `${drag.ids.length} songs` : (trackOf(drag.ids[0])?.title || 'Song');
+        document.body.append(drag.ghost);
+      }
+      timer = setInterval(tick, 30);
     }
-    place(e.clientY);
+    move();
   });
+  function tick() { // keep scrolling while the pointer rests near an edge
+    const r = drag?.scroller?.getBoundingClientRect();
+    if (r) { if (lastY < r.top + edge) drag.scroller.scrollTop -= 14; else if (lastY > r.bottom - edge) drag.scroller.scrollTop += 14; }
+    if (drag) move();
+  }
+  function move() {
+    if (drag.ghost) Object.assign(drag.ghost.style, { left: lastX + 14 + 'px', top: lastY + 10 + 'px' });
+    const target = drag.carry ? dropTargetAt(lastX, lastY) : null;
+    if (target !== hover) { clearHover(); if (target) { target.classList.add('drop-target'); hover = target; } }
+    drag.target = target;
+    if (drag.line) { drag.line.style.display = target ? 'none' : ''; if (!target) place(lastY); }
+  }
   function place(y) {
     const items = [...drag.box.querySelectorAll(SORT_ITEMS)];
     let to = items.length;
@@ -1222,10 +1271,101 @@ async function onSort(kind, from, to) {
     const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
     window.addEventListener('click', swallow, { capture: true, once: true }); // the drop must not also count as a click
     setTimeout(() => window.removeEventListener('click', swallow, true), 0);
+    if (d.target && d.carry) { dropSongs(d.target, d.ids); return; }
+    if (!d.kind) return;
     let to = d.to; if (to > d.from) to--;
     if (to !== d.from) onSort(d.kind, d.from, to);
   });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && drag?.started) { stop(); drag = null; } });
   addEventListener('blur', () => { if (drag) { stop(); drag = null; } });
+})();
+
+/* ---- adding songs from this computer ---- */
+const AUDIO_RE = /\.(mp3|wav|m4a|flac|ogg|opus|aac)$/i;
+function pickSongs(playlistId) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.multiple = true; input.accept = '.mp3,.wav,.m4a,.flac,.ogg,.opus,.aac,audio/*';
+  input.onchange = () => uploadSongs([...input.files], { playlistId });
+  input.click();
+}
+/* Files and whole folders from a drop. The entries must be taken before the first await. */
+async function filesFromDrop(dt) {
+  const out = [];
+  const entries = [...(dt.items || [])].map(i => i.webkitGetAsEntry?.()).filter(Boolean);
+  const files = [...(dt.files || [])];
+  const walk = async entry => {
+    if (entry.isFile) await new Promise(res => entry.file(f => { out.push(f); res(); }, res));
+    else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      for (;;) {
+        const batch = await new Promise(res => reader.readEntries(res, () => res([])));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e);
+      }
+    }
+  };
+  if (entries.length) for (const e of entries) await walk(e); else out.push(...files);
+  return out;
+}
+let uploadChain = Promise.resolve();
+const uploadSongs = (files, opts) => (uploadChain = uploadChain.then(() => doUpload(files, opts)).catch(() => { }));
+async function refreshAfterUpload() {
+  await loadAll(); renderLibrary();
+  if (['home', 'library', 'albums', 'album', 'liked', 'playlist'].includes(route.name)) renderRoute(true);
+}
+async function doUpload(files, { playlistId = null } = {}) {
+  files = files.filter(f => AUDIO_RE.test(f.name));
+  if (!files.length) { toast('Drop audio files: MP3, M4A, FLAC, WAV, OGG, OPUS or AAC'); return; }
+  let tray = $('#uptray');
+  if (!tray) { tray = document.createElement('div'); tray.id = 'uptray'; tray.className = 'uptray'; document.body.append(tray); }
+  const show = (i, name) => { tray.innerHTML = `<div class="t">Adding songs · ${i + 1} of ${files.length}</div><div class="s">${esc(name)}</div><div class="pb"><i style="width:${Math.round(i / files.length * 100)}%"></i></div>`; };
+  let added = 0, dupes = 0, failed = 0; const ids = [];
+  for (let i = 0; i < files.length; i++) {
+    show(i, files[i].name);
+    try {
+      const r = await fetch('/api/upload?name=' + enc(files[i].name), { method: 'POST', body: files[i] });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      ids.push(j.id); if (j.duplicate) dupes++; else added++;
+    } catch { failed++; }
+    if ((i + 1) % 4 === 0 && i + 1 < files.length) await refreshAfterUpload(); // songs appear as they land
+  }
+  tray.remove();
+  await refreshAfterUpload();
+  if (playlistId && ids.length) await addToPlaylist(playlistId, ids);
+  toast([added ? `Added ${plural(added, 'song')}` : '', dupes ? `${dupes} already in your library` : '', failed ? `${failed} failed` : ''].filter(Boolean).join(' · ') || 'Nothing added');
+}
+/* Drop files or folders anywhere in the window. Dropping on a playlist in the sidebar (or while looking
+   at a playlist) puts the songs in that playlist too. */
+(function enableFileDrop() {
+  let depth = 0;
+  const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  const zone = $('#dropzone');
+  const playlistUnder = e => document.elementFromPoint(e.clientX, e.clientY)?.closest('.lib-item[data-pl]');
+  const reset = () => { depth = 0; zone.hidden = true; $$('.lib-item.drop-target').forEach(x => x.classList.remove('drop-target')); };
+  addEventListener('dragenter', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); depth++;
+    const pl = route.name === 'playlist' ? S.playlists.find(p => p.id === route.arg) : null;
+    $('b', zone).textContent = pl ? `Drop songs to add them to "${pl.name}"` : 'Drop songs or folders to add them to your library';
+    zone.hidden = false;
+  });
+  addEventListener('dragover', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+    const t = playlistUnder(e);
+    $$('.lib-item.drop-target').forEach(x => { if (x !== t) x.classList.remove('drop-target'); });
+    t?.classList.add('drop-target');
+  });
+  addEventListener('dragleave', e => { if (hasFiles(e) && --depth <= 0) reset(); });
+  addEventListener('drop', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    const playlistId = playlistUnder(e)?.dataset.pl || (route.name === 'playlist' ? route.arg : null);
+    const taking = filesFromDrop(e.dataTransfer); // called now: the drop's entries stop working after this event
+    reset();
+    taking.then(files => uploadSongs(files, { playlistId }));
+  });
 })();
 
 /* ------------------------------------------------------- discover / genres */
@@ -1582,6 +1722,7 @@ document.addEventListener('click', async e => {
       case 'add-all-new': { const m = mixes().find(x => String(x.n) === d.n); if (m) { toast(`Adding ${mixNews(m).length} songs…`); autoAddNews(mixNews(m), null); } return; }
       case 'radio': { const tr = trackOf(d.id); if (tr) startRadio(tr); return; }
       case 'new-playlist': { const pl = await newPlaylist(); if (pl) go('#/playlist/' + pl.id); return; }
+      case 'add-songs': pickSongs(d.pl || null); return;
       case 'pl-cover': pickPlaylistCover(d.id); return;
       case 'source-menu': sourceMenu(d.play, r.left, r.bottom + 4); return;
       case 'playlist-menu': playlistMenu(d.id, r.left, r.bottom + 4); return;
@@ -1614,7 +1755,15 @@ document.addEventListener('click', async e => {
   const lyr = t.closest('.lyr p[data-t]'); if (lyr) { audio.currentTime = +lyr.dataset.t; return; }
   const chip = t.closest('#lib-chips .chip'); if (chip) { S.libFilter = chip.dataset.filter; renderLibrary(); return; }
   const row = t.closest('.row');
-  if (row) { $$('.row.sel').forEach(r => r.classList.remove('sel')); row.classList.add('sel'); return; }
+  if (row) {
+    const rows = [...row.parentElement.querySelectorAll(':scope > .row')];
+    if (e.shiftKey && S.anchorRow && rows.includes(S.anchorRow)) { // a range
+      const [lo, hi] = [rows.indexOf(S.anchorRow), rows.indexOf(row)].sort((x, y) => x - y);
+      rows.forEach((r, i) => r.classList.toggle('sel', i >= lo && i <= hi));
+    } else if (e.ctrlKey || e.metaKey) { row.classList.toggle('sel'); S.anchorRow = row; } // one more
+    else { $$('.row.sel').forEach(r => r.classList.remove('sel')); row.classList.add('sel'); S.anchorRow = row; }
+    return;
+  }
   const hrefEl = t.closest('[data-href]');
   if (hrefEl && hrefEl.dataset.href) { go(hrefEl.dataset.href); return; }
   const webEl = t.closest('.card[data-kind="web"]'); if (webEl) { playPv(webEl.dataset.key, webEl); return; }

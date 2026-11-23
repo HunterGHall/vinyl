@@ -715,6 +715,18 @@ fn handle(mut req: Request) {
         .iter()
         .find(|h| h.field.equiv("If-None-Match"))
         .map(|h| h.value.as_str().to_string());
+    // A song being added from the user's computer can be large: stream it to disk instead of
+    // reading it into memory like the small JSON bodies below.
+    if method == Method::Post && path == "/api/upload" {
+        let name = unquote(query_param(query, "name").unwrap_or(""));
+        let resp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::import::receive(&name, req.as_reader()))) {
+            Ok(Ok(v)) => ok(v),
+            Ok(Err(e)) => err(400, &e),
+            Err(_) => err(500, "Internal error"),
+        };
+        let _ = req.respond(resp);
+        return;
+    }
     let mut body = Vec::new();
     if method != Method::Get && method != Method::Head {
         let _ = req.as_reader().take(10_000_000).read_to_end(&mut body);

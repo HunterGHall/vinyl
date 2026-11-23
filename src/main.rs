@@ -13,6 +13,7 @@
 mod deps;
 mod discover;
 mod download;
+mod import;
 mod library;
 mod mediakeys;
 mod lyrics;
