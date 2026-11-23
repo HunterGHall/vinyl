@@ -960,9 +960,6 @@ function renderSettings() {
       <div class="set-row"><div><b>Volume levelling</b><div class="note">Turns loud songs down so everything plays at a similar volume.</div></div><label class="switch"><input type="checkbox" data-setting="normalize_volume" aria-label="Volume levelling" ${S.settings?.normalize_volume !== false ? 'checked' : ''}><span></span></label></div>
       <div class="set-row"><div><b>Lyrics</b><div class="note">Look up lyrics for your songs and show them in Now Playing.</div></div><label class="switch"><input type="checkbox" data-setting="lyrics_enabled" aria-label="Lyrics" ${S.settings?.lyrics_enabled !== false ? 'checked' : ''}><span></span></label></div>
     </section>
-    <section class="shelf"><div class="shelf-head"><div><h2>Download tools</h2><div class="sub">Vinyl uses yt-dlp to download songs and ffmpeg to convert them</div></div></div>
-      <div class="set-row"><div><b>Status</b><div class="note" id="deps-status">Checking…</div></div><button class="pill-btn ghost" id="deps-btn" data-act="install-deps" hidden>Install missing tools</button></div>
-    </section>
     <section class="shelf"><div class="shelf-head"><div><h2>Your data</h2><div class="sub">Everything lives in the data and library folders next to the app</div></div></div>
       <div class="set-row"><div><b>Find duplicate songs</b><div class="note">Finds copies of the same song and lets you remove the extras. Nothing is deleted until you confirm.</div></div><button class="pill-btn ghost" data-act="find-dups">Find</button></div>
       <div class="set-row"><div><b>Refresh data files</b><div class="note">Rewrites the saved JSON files (settings, playlists, lyrics and more) in the readable, indented format. Nothing is deleted.</div></div><button class="pill-btn ghost" data-act="refresh-json">Refresh</button></div>
@@ -971,7 +968,6 @@ function renderSettings() {
       <div class="set-row"><div><b>Delete everything</b><div class="note">Deletes every song file, playlist, like and the listening history. This cannot be undone.</div></div><button class="pill-btn danger" data-act="delete-all">Delete everything</button></div>
     </section>`;
   $('#view').style.setProperty('--hue', '#1a120d');
-  refreshDeps();
   api('/api/update/status').then(st => { const el = $('#upd-ver'); if (el) el.textContent = `Vinyl ${st.current}${S.update ? (S.update.available ? ` · ${S.update.latest} is available` : ' · up to date') : ''}`; }).catch(() => { });
 }
 async function wipe(kind) {
@@ -1178,12 +1174,10 @@ async function refreshDeps() {
   let d;
   try { d = await api('/api/deps'); } catch { return; }
   const missing = [!d.yt_dlp && 'yt-dlp', !d.ffmpeg && 'ffmpeg'].filter(Boolean);
-  const st = $('#deps-status'), btn = $('#deps-btn'), banner = $('#deps-banner');
+  const banner = $('#deps-banner');
   const text = d.installing ? 'Installing… this can take a minute.'
     : missing.length ? `Missing: ${missing.join(' and ')}.${d.error ? ' ' + d.error : ''}${d.winget ? '' : ' winget was not found, so install them by hand.'}`
     : 'yt-dlp and ffmpeg are installed.';
-  if (st) st.textContent = text;
-  if (btn) { btn.hidden = !missing.length || !d.winget; btn.disabled = d.installing; btn.textContent = d.installing ? 'Installing…' : 'Install missing tools'; }
   if (banner) {
     banner.innerHTML = missing.length ? `<div class="start"><h2>Vinyl needs ${missing.join(' and ')} to add music</h2><p>${esc(text)}</p>${d.winget && !d.installing ? '<div class="drop"><button class="pill-btn" data-act="install-deps">Install now</button></div>' : ''}</div>` : '';
   }
