@@ -299,7 +299,10 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 .seek span{width:38px}
 .seek span:first-child{text-align:right}
 .dock-right{display:flex;align-items:center;gap:4px;justify-content:flex-end}
-.expand{background:rgba(255,255,255,.08);margin-left:6px}
+.expand{background:rgba(255,255,255,.08);margin-left:6px;transition:background .15s}
+.expand:hover{background:rgba(255,255,255,.16)}
+.expand.on{color:var(--text)}
+.expand.on::after{display:none} /* the turned chevron already shows it is open; a dot on the rim looked off-centre */
 .expand svg{transition:transform .2s}
 .stage-open .expand svg{transform:rotate(180deg)}
 .dock input[type=range]{-webkit-appearance:none;appearance:none;height:14px;background:transparent;flex:1;cursor:pointer;--p:0%}
