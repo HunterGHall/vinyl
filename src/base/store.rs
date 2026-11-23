@@ -163,6 +163,31 @@ pub fn write_json(path: &Path, data: &Value, pretty: bool, backup: bool) -> std:
     result
 }
 
+/// Rewrites every JSON file in `dir` (and its subfolders) with indentation, leaving
+/// files that don't parse untouched. Returns how many files were rewritten.
+pub fn reformat_json_dir(dir: &Path) -> usize {
+    let Ok(entries) = fs::read_dir(dir) else { return 0 };
+    let mut count = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            count += reformat_json_dir(&path);
+        } else if path.extension().is_some_and(|e| e == "json") {
+            let parsed = fs::read_to_string(&path)
+                .ok()
+                .and_then(|t| serde_json::from_str::<Value>(t.trim_start_matches('\u{feff}')).ok());
+            match parsed {
+                Some(v) => match write_json(&path, &v, true, false) {
+                    Ok(()) => count += 1,
+                    Err(e) => warn(format!("Couldn't reformat {}: {e}", path.display())),
+                },
+                None => warn(format!("Skipped {} (not valid JSON)", path.display())),
+            }
+        }
+    }
+    count
+}
+
 /// Saves a pretty, backed-up JSON file, logging (not propagating) failures.
 pub fn save(path: &Path, data: &Value) {
     if let Err(e) = write_json(path, data, true, true) {

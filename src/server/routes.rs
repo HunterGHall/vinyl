@@ -201,6 +201,12 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
             empty(204)
         }
 
+        // Rewrites the saved data files (settings, playlists, cached lyrics...) in the readable, indented format.
+        (Method::Post, ["api", "data", "refresh"]) => {
+            let _g = lock();
+            ok(json!({"files": store::reformat_json_dir(&paths().data)}))
+        }
+
         // ---- likes + history ----
         (Method::Get, ["api", "likes"]) => ok(load_likes()),
         (Method::Put, ["api", "likes", id]) => match safe_track_path(id).filter(|f| f.is_file()) {

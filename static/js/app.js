@@ -883,6 +883,7 @@ function renderSettings() {
       <div class="set-row"><div><b>Status</b><div class="note" id="deps-status">Checking…</div></div><button class="pill-btn ghost" id="deps-btn" data-act="install-deps" hidden>Install missing tools</button></div>
     </section>
     <section class="shelf"><div class="shelf-head"><div><h2>Your data</h2><div class="sub">Everything lives in the data and library folders next to the app</div></div></div>
+      <div class="set-row"><div><b>Refresh data files</b><div class="note">Rewrites the saved JSON files (settings, playlists, lyrics and more) in the readable, indented format. Nothing is deleted.</div></div><button class="pill-btn ghost" data-act="refresh-json">Refresh</button></div>
       <div class="set-row"><div><b>Reset recommendations</b><div class="note">Clears liked songs, listening history and play counts. Your songs and playlists stay.</div></div><button class="pill-btn ghost" data-act="reset-recs">Reset</button></div>
       <div class="set-row"><div><b>Delete all playlists</b><div class="note">Removes every playlist. Songs stay in the library.</div></div><button class="pill-btn ghost" data-act="delete-playlists">Delete</button></div>
       <div class="set-row"><div><b>Delete everything</b><div class="note">Deletes every song file, playlist, like and the listening history. This cannot be undone.</div></div><button class="pill-btn danger" data-act="delete-all">Delete everything</button></div>
@@ -1691,6 +1692,7 @@ document.addEventListener('click', async e => {
       case 'play-ids': playSource(d.key); return;
       case 'install-deps': { try { await api('/api/deps/install', { method: 'POST' }); } catch (e) { toast(e.message); return; } S.depsWas = true; refreshDeps(); return; }
       case 'check-update': { const i = await checkForUpdate({ manual: true }); const el = $('#upd-ver'); if (el && i) el.textContent = `Vinyl ${i.current}${i.available ? ` · ${i.latest} is available` : ' · up to date'}`; return; }
+      case 'refresh-json': { actEl.disabled = true; try { const r = await api('/api/data/refresh', { method: 'POST' }); toast(`Refreshed ${r.files} files`); } catch (e) { toast(e.message); } actEl.disabled = false; return; }
       case 'reset-recs': wipe('recs'); return;
       case 'delete-playlists': wipe('playlists'); return;
       case 'delete-all': wipe('all'); return;
