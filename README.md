@@ -32,7 +32,7 @@ Your own songs on Windows, with Daily Mixes, new music from similar artists, and
 
 <p align="center">
   <img src="docs/screenshots/home.png" alt="Home: Daily Mixes and new music" width="49%">
-  <img src="docs/screenshots/now-playing.png" alt="Now Playing: the spinning ASCII vinyl with synced lyrics" width="49%">
+  <img src="docs/screenshots/now-playing-blinding-lights.png" alt="Now Playing: the spinning ASCII vinyl" width="49%">
 </p>
 <p align="center">
   <img src="docs/screenshots/albums.png" alt="Albums" width="49%">
