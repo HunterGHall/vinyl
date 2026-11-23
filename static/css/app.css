@@ -46,6 +46,10 @@ img{display:block}
 .nav-link.on{background:var(--raise)}
 .nav-btn{width:100%;text-align:left}
 /* only Now Playing is lit while it is open; the other tabs keep their hover and focus highlight */
+/* lyrics hidden: the title sits in the middle, next to the record */
+.lyrics-off .stage-info{justify-content:center}
+.lyrics-off .np-title .tt{font-size:clamp(34px,4.2vw,56px)}
+.lyrics-off .np-artist{font-size:19px}
 .stage-open .nav-link.on:not(.nav-btn):not(:hover):not(:focus-visible){background:transparent}
 .playing .nav-btn svg{animation:spin 4s linear infinite}
 .side-head{display:flex;align-items:center;justify-content:space-between;margin:20px 10px 6px;padding-right:2px;font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--dim);text-transform:uppercase}

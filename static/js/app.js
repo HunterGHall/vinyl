@@ -420,13 +420,15 @@ $('#vol').oninput = e => { P.vol = +e.target.value; applyVolume(); lsSet('vinyl.
 $('#seek').addEventListener('input', e => { seeking = true; e.target.style.setProperty('--p', e.target.value / 10 + '%'); $('#t-cur').textContent = fmt(e.target.value / 1000 * (audio.duration || 0)); });
 $('#seek').addEventListener('change', e => { if (audio.duration) audio.currentTime = e.target.value / 1000 * audio.duration; seeking = false; });
 $('#b-queue').onclick = () => go(route.name === 'queue' ? '#/home' : '#/queue');
-$('#b-lyrics').onclick = () => { if (S.np && S.lyrics) S.np = false; else { S.np = true; S.lyrics = true; } applyNPState(); };
+// Closed: open Now Playing with the lyrics showing. Open: just show or hide the lyrics and stay there.
+$('#b-lyrics').onclick = () => { if (!S.np) { S.np = true; S.lyrics = true; } else S.lyrics = !S.lyrics; applyNPState(); };
 $('#bar-track').addEventListener('click', e => { if (e.target.closest('.disc')) { S.np = !S.np; applyNPState(); } });
 $('#nav-np').onclick = () => { S.np = !S.np; applyNPState(); };
 $('#close-stage').onclick =() => { S.np = false; applyNPState(); };
 $('#toggle-np').onclick = () => { S.np = !S.np; applyNPState(); };
 function applyNPState() {
   document.body.classList.toggle('stage-open', S.np);
+  document.body.classList.toggle('lyrics-off', !S.lyrics);
   $('#nav-np')?.classList.toggle('on', S.np);
   lsSet('vinyl.np', S.np); lsSet('vinyl.lyrics', S.lyrics); syncControls();
   if (S.np) { AsciiVinyl.start(() => !audio.paused); AsciiVinyl.setCover(P.cur?.cover); renderNP(); } else AsciiVinyl.stop();
@@ -509,8 +511,8 @@ function renderNP() {
     <div class="np-head">${esc(P.label || 'Now playing')}</div>
     <div class="np-title"><div><div class="tt">${esc(t.title)}</div><div class="np-artist">${t.isPv ? esc(t.artist) + (t.item?.album ? ' · ' + esc(t.item.album) : '') : artistLink(t) + (t.album ? ` · <a href="${albumHref(t)}">${esc(t.album)}</a>` : '')}</div></div>${heartBtn(t.id)}</div>
     ${t.isPv ? `<div class="pv-note">Downloading this song to your library. It starts playing as soon as it is ready.</div>` : ''}
-    ${t.isPv ? '' : `<div class="np-sec grow"><h4>Lyrics <button data-act="refresh-lyrics">Reload</button></h4><div id="lyr" class="lyr plain"><p class="note">Loading lyrics…</p></div></div>`}`;
-  if (!t.isPv) loadLyrics(t);
+    ${t.isPv || !S.lyrics ? '' : `<div class="np-sec grow"><h4>Lyrics <button data-act="refresh-lyrics">Reload</button></h4><div id="lyr" class="lyr plain"><p class="note">Loading lyrics…</p></div></div>`}`;
+  if (!t.isPv && S.lyrics) loadLyrics(t);
 }
 const miniRow = t => t ? `<button class="mini" data-id="${esc(t.id)}" data-act="play-one">${artHTML(t)}<div class="txt"><div class="tt">${esc(t.title)}</div><div class="ta">${esc(t.artist)}</div></div></button>` : '';
 
