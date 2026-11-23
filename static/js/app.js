@@ -1007,7 +1007,6 @@ function renderLibrary_() {
   const ids = ts.map(t => t.id);
   $('#view').innerHTML = `<h1 class="big">Your songs</h1><div class="meta note" style="margin-top:6px">${plural(ids.length, 'song')} · ${fmtLong(totalDur(ids))}</div>
     <div class="actions" style="margin-top:10px"><button class="go lg" data-act="play-ids" data-key="all" aria-label="Play all">${ICON.play}</button>
-    <button class="pill-btn" data-act="add-songs">+ Add songs</button>
     ${Object.entries(sorts).map(([k, v]) => `<button class="chip ${S.sort === k ? 'on' : ''}" data-act="sort" data-sort="${k}">${v}</button>`).join('')}</div>
     <div class="note" style="margin-bottom:6px">Drag songs or folders in from your computer, or drag a song onto a playlist in the sidebar. Ctrl or Shift click selects several. <a href="#/add" style="text-decoration:underline">Add from a link</a></div>
     ${ids.length ? trackRows(ids) : `<div class="empty"><b>No songs yet</b><div class="drop" style="justify-content:center"><button class="pill-btn" data-act="add-songs">Add songs from this computer</button><button class="pill-btn ghost" data-act="goto-add">Add from a link</button></div></div>`}`;
