@@ -391,3 +391,17 @@ body.maxed .wincontrols .i-rest{display:block}
 .skel-card{aspect-ratio:1;border-radius:10px}
 .skel-title,.skel-card{background:linear-gradient(100deg,rgba(255,255,255,.05) 30%,rgba(255,255,255,.11) 50%,rgba(255,255,255,.05) 70%);background-size:300% 100%;animation:shimmer 1.4s ease-in-out infinite}
 @keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+
+/* ---- drag to reorder, queue remove button, editable playlist cover ---- */
+[data-sort]>.row,[data-sort]>.lib-item{cursor:grab}
+.row.dragging,.lib-item.dragging{opacity:.4}
+body.dragging-rows,body.dragging-rows *{cursor:grabbing!important;user-select:none}
+.drop-line{position:fixed;height:2px;background:var(--accent2);box-shadow:0 0 0 1px rgba(0,0,0,.4);z-index:90;pointer-events:none;border-radius:2px}
+.more.qrm{opacity:.55}
+.row:hover .more.qrm{opacity:1}
+.more.qrm:hover{color:#ff9a86}
+.cover-wrap{position:relative;flex:none;border-radius:12px;overflow:hidden}
+.cover-wrap .art{display:block}
+.cover-btn{position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;background:rgba(0,0,0,.58);color:#fff;font-weight:600;font-size:14px;opacity:0;transition:opacity .15s}
+.cover-btn svg{width:30px;height:30px}
+.cover-wrap:hover .cover-btn,.cover-btn:focus-visible{opacity:1}

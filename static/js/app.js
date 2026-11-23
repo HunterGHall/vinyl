@@ -36,6 +36,8 @@ const ICON = {
   radio: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.5 10.5 0 0 0 0 14.8M19.4 4.6a10.5 10.5 0 0 1 0 14.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   edit: '<svg viewBox="0 0 24 24"><path d="m4 20 1-4L16.5 4.5l3 3L8 19zM14 7l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  image: '<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="9" cy="9" r="1.6"/></svg>',
   list: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 11h10M4 16h13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
 };
 
@@ -575,7 +577,7 @@ function highlightLyric(c) {
 
 function regList(ids) { const k = 'l' + Object.keys(S.lists).length; S.lists[k] = ids; return k; }
 
-function rowHTML(id, i, key, { album = true, removeFrom = null, n = i + 1 } = {}) {
+function rowHTML(id, i, key, { album = true, removeFrom = null, n = i + 1, queueSec = null } = {}) {
     const t = trackOf(id); if (!t) return '';
     return `<div class="row ${P.cur?.id === id ? 'now' : ''}" data-id="${esc(id)}" data-list="${key}" data-i="${i}">
       <div class="num"><span class="n">${n}</span><span class="eq"><i></i><i></i><i></i></span><svg class="p" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg></div>
@@ -583,7 +585,9 @@ function rowHTML(id, i, key, { album = true, removeFrom = null, n = i + 1 } = {}
       ${album ? `<div class="alb">${t.album ? `<a href="${albumHref(t)}">${esc(t.album)}</a>` : ''}</div>` : ''}
       ${heartBtn(id)}
       <div class="dur">${fmt(t.duration)}</div>
-      <button class="more" data-act="more" data-id="${esc(id)}" ${removeFrom ? `data-from="${esc(removeFrom)}"` : ''} aria-label="More options for ${esc(t.title)}">${ICON.more}</button>
+      ${queueSec
+        ? `<button class="more qrm" data-act="queue-remove" data-sec="${queueSec}" data-i="${i}" title="Remove from queue" aria-label="Remove ${esc(t.title)} from the queue">${ICON.x}</button>`
+        : `<button class="more" data-act="more" data-id="${esc(id)}" ${removeFrom ? `data-from="${esc(removeFrom)}"` : ''} aria-label="More options for ${esc(t.title)}">${ICON.more}</button>`}
     </div>`;
 }
 const webRowHTML = (i, n, key, idx) => `<div class="row web-row ${P.cur?.id === 'pv:' + i.id ? 'now' : ''}" data-id="pv:${esc(i.id)}" data-web="${esc(i.id)}" data-list="${key}" data-i="${idx}">
@@ -597,10 +601,10 @@ function previewRows(items) {
   return `<div class="tl">${tlHead(true)}${items.map((it, i) => webRowHTML(it, i + 1, key, i)).join('')}</div>`;
 }
 const tlHead = album => `<div class="tl-head"><div style="text-align:center">#</div><div>Title</div>${album ? '<div class="alb">Album</div>' : ''}<div></div><div style="text-align:right">Time</div><div></div></div>`;
-function trackRows(ids, { album = true, removeFrom = null } = {}) {
+function trackRows(ids, { album = true, removeFrom = null, sort = '', queueSec = null } = {}) {
   const key = regList(ids);
-  const rows = ids.map((id, i) => rowHTML(id, i, key, { album, removeFrom })).join('');
-  return `<div class="tl ${album ? '' : 'no-album'}"><div class="tl-head"><div style="text-align:center">#</div><div>Title</div>${album ? '<div class="alb">Album</div>' : ''}<div></div><div style="text-align:right">Time</div><div></div></div>${rows}</div>`;
+  const rows = ids.map((id, i) => rowHTML(id, i, key, { album, removeFrom, queueSec })).join('');
+  return `<div class="tl ${album ? '' : 'no-album'}" ${sort ? `data-sort="${esc(sort)}"` : ''}><div class="tl-head"><div style="text-align:center">#</div><div>Title</div>${album ? '<div class="alb">Album</div>' : ''}<div></div><div style="text-align:right">Time</div><div></div></div>${rows}</div>`;
 }
 
 function card({ kind, key, art, title, sub, round = false, href = '', playKey = '' }) {
@@ -783,7 +787,9 @@ function heroHTML({ kind, title, art, meta, round }) {
   return `<div class="hero">${art.replace('class="art ', `class="art ${round ? 'round ' : ''}`)}<div><div class="kind">${esc(kind)}</div><h1 class="big">${esc(title)}</h1><div class="meta">${meta}</div></div></div>`;
 }
 function actionsHTML(playKey, { menu = '' } = {}) {
-  return `<div class="actions"><button class="go lg" data-act="play-card" data-play="${esc(playKey)}" aria-label="Play">${ICON.play}</button><button class="ghost-btn ${P.shuffle ? 'on' : ''}" data-act="shuffle-card" data-play="${esc(playKey)}" title="Shuffle play" aria-label="Shuffle play">${ICON.shuffle}</button>${menu}</div>`;
+  const more = ['album', 'mix', 'artist', 'liked'].includes(playKey.split(':')[0])
+    ? `<button class="ghost-btn" data-act="source-menu" data-play="${esc(playKey)}" title="More options" aria-label="More options">${ICON.more}</button>` : '';
+  return `<div class="actions"><button class="go lg" data-act="play-card" data-play="${esc(playKey)}" aria-label="Play">${ICON.play}</button><button class="ghost-btn ${P.shuffle ? 'on' : ''}" data-act="shuffle-card" data-play="${esc(playKey)}" title="Shuffle play" aria-label="Shuffle play">${ICON.shuffle}</button>${more}${menu}</div>`;
 }
 const totalDur = ids => ids.reduce((s, id) => s + (trackOf(id)?.duration || 0), 0);
 
@@ -934,8 +940,9 @@ function renderPlaylist(id) {
     const r = spread(scoreTracks(new Map([...seeds].map(([k, n]) => [k, Math.min(1, n / 2)])), { exclude: new Set(ids), novelty: 0.1 }), 6);
     recs = r.length ? `<div class="sect-title">Recommended songs</div><div class="note" style="margin-bottom:8px">Based on what is in this playlist</div>${recRows(r.map(t => t.id), id)}` : '';
   }
-  $('#view').innerHTML = `${heroHTML({ kind: 'Playlist', title: pl.name, art: playlistArt(pl), meta: `<b>${plural(ids.length, 'song')}</b>${ids.length ? ` · ${fmtLong(totalDur(ids))}` : ''}` })}
-    ${ids.length ? actionsHTML('playlist:' + id, { menu }) + trackRows(ids, { removeFrom: id }) : `<div class="actions">${menu}</div><div class="empty"><b>This playlist is empty</b>Add songs from any song's ••• menu, or pick from the recommendations below.</div>`}`;
+  const cover = `<div class="cover-wrap">${playlistArt(pl)}<button class="cover-btn" data-act="pl-cover" data-id="${esc(id)}">${ICON.image}<span>Change cover</span></button></div>`;
+  $('#view').innerHTML = `${heroHTML({ kind: 'Playlist', title: pl.name, art: cover, meta: `<b>${plural(ids.length, 'song')}</b>${ids.length ? ` · ${fmtLong(totalDur(ids))}` : ''}` })}
+    ${ids.length ? actionsHTML('playlist:' + id, { menu }) + trackRows(ids, { removeFrom: id, sort: 'playlist:' + id }) : `<div class="actions">${menu}</div><div class="empty"><b>This playlist is empty</b>Add songs from any song's ••• menu, or pick from the recommendations below.</div>`}`;
   tint(ids);
 }
 function recsForEmpty(pid) {
@@ -1131,10 +1138,95 @@ function renderQueue() {
   const cur = P.cur, ctxNext = P.order.slice(P.pos + 1, P.pos + 41);
   $('#view').innerHTML = `<h1 class="big">Queue</h1>
     ${cur ? `<div class="sect-title">Now playing</div>${trackRows([cur.id], { album: false })}` : '<div class="empty"><b>Nothing is playing</b></div>'}
-    ${P.userQ.length ? `<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center">Next in queue <button class="chip" data-act="clear-queue">Clear queue</button></div>${trackRows(P.userQ, { album: false })}` : ''}
-    ${ctxNext.length ? `<div class="sect-title">Next from ${esc(P.label || 'your library')}</div>${trackRows(ctxNext, { album: false })}` : ''}`;
+    ${P.userQ.length ? `<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center">Next in queue <button class="chip" data-act="clear-queue">Clear queue</button></div><div class="note" style="margin:-4px 0 6px">Drag a song to reorder, or press × to remove it.</div>${trackRows(P.userQ, { album: false, sort: 'queue-user', queueSec: 'user' })}` : ''}
+    ${ctxNext.length ? `<div class="sect-title">Next from ${esc(P.label || 'your library')}</div>${P.userQ.length ? '' : '<div class="note" style="margin:-4px 0 6px">Drag a song to reorder, or press × to remove it.</div>'}${trackRows(ctxNext, { album: false, sort: 'queue-ctx', queueSec: 'ctx' })}` : ''}`;
   $('#view').style.setProperty('--hue', '#3a2a22');
 }
+
+function queueChanged() { renderRoute(true); renderNP(); saveStateSoon(); }
+function queueRemove(sec, i) {
+  if (sec === 'user') P.userQ.splice(i, 1);
+  else {
+    const at = P.pos + 1 + i, id = P.order[at];
+    P.order.splice(at, 1);
+    const j = P.ctx.indexOf(id); if (j >= 0 && !P.shuffle) P.ctx.splice(j, 1);
+  }
+  queueChanged();
+}
+function queueJump(sec, i) {
+  if (sec === 'user') { const [id] = P.userQ.splice(i, 1); if (id) loadTrack(id, true); }
+  else { P.pos = P.pos + 1 + i; loadTrack(P.order[P.pos], true); }
+  if (route.name === 'queue') renderRoute(true);
+}
+const moveItem = (arr, from, to) => { const [x] = arr.splice(from, 1); arr.splice(to, 0, x); };
+
+/* ---- drag to reorder: queue sections, playlist songs and the playlists in the sidebar ---- */
+const SORT_ITEMS = ':scope > .row, :scope > .lib-item';
+async function onSort(kind, from, to) {
+  if (kind === 'queue-user') { moveItem(P.userQ, from, to); queueChanged(); }
+  else if (kind === 'queue-ctx') {
+    const base = P.pos + 1; moveItem(P.order, base + from, base + to);
+    if (!P.shuffle) P.ctx = P.order.slice();
+    queueChanged();
+  } else if (kind.startsWith('playlist:')) {
+    const pid = kind.slice(9), pl = S.playlists.find(p => p.id === pid); if (!pl) return;
+    const ids = (pl.track_ids || []).filter(id => S.by.has(id)); moveItem(ids, from, to);
+    pl.track_ids = ids; S.ver++; renderRoute(true); renderLibrary();
+    try { await api(`/api/playlists/${pid}/order`, { method: 'PUT', body: { track_ids: ids } }); }
+    catch { toast("Couldn't save the new order"); await refreshPlaylists(); renderRoute(true); }
+  } else if (kind === 'playlists') {
+    const ids = S.playlists.map(p => p.id); moveItem(ids, from, to);
+    S.playlists = ids.map(id => S.playlists.find(p => p.id === id)); S.ver++; renderLibrary();
+    try { await api('/api/playlists/order', { method: 'PUT', body: { ids } }); }
+    catch { toast("Couldn't save the new order"); await refreshPlaylists(); }
+  }
+}
+(function enableSort() {
+  let drag = null, timer = 0, lastY = 0;
+  const edge = 56; // px from the edge of the scroll area where dragging starts to scroll it
+  const stop = () => { clearInterval(timer); document.body.classList.remove('dragging-rows'); drag?.line?.remove(); drag?.item.classList.remove('dragging'); };
+  document.addEventListener('mousedown', e => {
+    if (e.button !== 0 || e.target.closest('button:not(.lib-item),a,input,select,textarea')) return;
+    const item = e.target.closest('[data-sort] > .row, [data-sort] > .lib-item'); if (!item) return;
+    drag = { item, box: item.parentElement, kind: item.parentElement.dataset.sort, startY: e.clientY, started: false };
+    drag.from = [...drag.box.querySelectorAll(SORT_ITEMS)].indexOf(item);
+  });
+  document.addEventListener('mousemove', e => {
+    if (!drag) return;
+    lastY = e.clientY;
+    if (!drag.started) {
+      if (Math.abs(e.clientY - drag.startY) < 6) return;
+      drag.started = true; drag.item.classList.add('dragging'); document.body.classList.add('dragging-rows');
+      drag.line = document.createElement('div'); drag.line.className = 'drop-line'; document.body.append(drag.line);
+      drag.scroller = drag.box.closest('.view, .lib-list');
+      timer = setInterval(() => { // keep scrolling while the pointer rests near an edge
+        const r = drag.scroller?.getBoundingClientRect(); if (!r) return;
+        if (lastY < r.top + edge) drag.scroller.scrollTop -= 14; else if (lastY > r.bottom - edge) drag.scroller.scrollTop += 14;
+        place(lastY);
+      }, 30);
+    }
+    place(e.clientY);
+  });
+  function place(y) {
+    const items = [...drag.box.querySelectorAll(SORT_ITEMS)];
+    let to = items.length;
+    for (let i = 0; i < items.length; i++) { const r = items[i].getBoundingClientRect(); if (y < r.top + r.height / 2) { to = i; break; } }
+    drag.to = to;
+    const ref = items[Math.min(to, items.length - 1)].getBoundingClientRect(), box = drag.box.getBoundingClientRect();
+    Object.assign(drag.line.style, { left: box.left + 'px', width: box.width + 'px', top: (to < items.length ? ref.top : ref.bottom) - 1 + 'px' });
+  }
+  document.addEventListener('mouseup', () => {
+    if (!drag) return;
+    const d = drag; stop(); drag = null;
+    if (!d.started) return;
+    const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
+    window.addEventListener('click', swallow, { capture: true, once: true }); // the drop must not also count as a click
+    setTimeout(() => window.removeEventListener('click', swallow, true), 0);
+    let to = d.to; if (to > d.from) to--;
+    if (to !== d.from) onSort(d.kind, d.from, to);
+  });
+  addEventListener('blur', () => { if (drag) { stop(); drag = null; } });
+})();
 
 /* ------------------------------------------------------- discover / genres */
 
@@ -1274,12 +1366,47 @@ function playlistPicker(ids, x, y) {
   for (const pl of S.playlists) items.push({ label: pl.name, run: () => addToPlaylist(pl.id, ids) });
   openMenu(x, y, items);
 }
+function pickPlaylistCover(pid) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*';
+  input.onchange = () => { const f = input.files?.[0]; if (f) setPlaylistCover(pid, f); };
+  input.click();
+}
+/* The picture is cropped to a square and shrunk here, then the server stores it as the playlist's cover. */
+async function setPlaylistCover(pid, file) {
+  try {
+    const bmp = await createImageBitmap(file), side = Math.min(bmp.width, bmp.height), out = 600;
+    const c = document.createElement('canvas'); c.width = c.height = out;
+    c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, out, out);
+    const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.88));
+    const r = await fetch(`/api/playlists/${pid}/cover`, { method: 'POST', body: blob, headers: { 'Content-Type': 'image/jpeg' } });
+    if (!r.ok) throw new Error(r.statusText);
+    await refreshPlaylists(); renderRoute(true); toast('Cover updated');
+  } catch { toast("Couldn't use that picture"); }
+}
+async function removePlaylistCover(pid) {
+  try { await api(`/api/playlists/${pid}/cover`, { method: 'DELETE' }); } catch { toast("Couldn't remove the cover"); return; }
+  await refreshPlaylists(); renderRoute(true);
+}
+/* Play / Play next / Add to queue for an album, mix, artist, playlist or Liked Songs. */
+function sourceMenu(key, x, y) {
+  const ids = sourceIds(key); if (!ids.length) { toast('Nothing in there yet'); return; }
+  openMenu(x, y, [
+    { label: 'Play', icon: ICON.play, run: () => playSource(key) },
+    { label: 'Play next', icon: ICON.play, run: () => queueNext(ids) },
+    { label: 'Add to queue', icon: ICON.queue, run: () => queueEnd(ids) },
+  ]);
+}
+
 function playlistMenu(pid, x, y) {
   const pl = S.playlists.find(p => p.id === pid); if (!pl) return;
   openMenu(x, y, [
     { label: 'Play', icon: ICON.play, run: () => playSource('playlist:' + pid) },
+    { label: 'Play next', icon: ICON.play, run: () => queueNext(sourceIds('playlist:' + pid)) },
     { label: 'Add to queue', icon: ICON.queue, run: () => queueEnd(sourceIds('playlist:' + pid)) },
     { sep: 1 },
+    { label: 'Change cover…', icon: ICON.image, run: () => pickPlaylistCover(pid) },
+    ...(pl.cover ? [{ label: 'Remove cover', icon: ICON.trash, run: () => removePlaylistCover(pid) }] : []),
     { label: 'Rename', icon: ICON.edit, run: () => renamePlaylist(pid) },
     { label: 'Delete playlist', icon: ICON.trash, danger: true, run: () => deletePlaylist(pid) },
   ]);
@@ -1455,9 +1582,12 @@ document.addEventListener('click', async e => {
       case 'add-all-new': { const m = mixes().find(x => String(x.n) === d.n); if (m) { toast(`Adding ${mixNews(m).length} songs…`); autoAddNews(mixNews(m), null); } return; }
       case 'radio': { const tr = trackOf(d.id); if (tr) startRadio(tr); return; }
       case 'new-playlist': { const pl = await newPlaylist(); if (pl) go('#/playlist/' + pl.id); return; }
+      case 'pl-cover': pickPlaylistCover(d.id); return;
+      case 'source-menu': sourceMenu(d.play, r.left, r.bottom + 4); return;
       case 'playlist-menu': playlistMenu(d.id, r.left, r.bottom + 4); return;
       case 'goto-add': go('#/add'); return;
       case 'sort': S.sort = d.sort; lsSet('vinyl.sort', S.sort); renderRoute(true); return;
+      case 'queue-remove': queueRemove(d.sec, +d.i); return;
       case 'clear-queue': P.userQ = []; renderRoute(true); renderNP(); saveStateSoon(); return;
       case 'refresh-lyrics': if (P.cur) loadLyrics(P.cur, true); return;
       case 'scroll-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); g.scrollBy({ left: +d.dir * Math.max(240, g.clientWidth * 0.85), behavior: 'smooth' }); return; }
@@ -1505,12 +1635,16 @@ function sourceLabelForRoute() {
 
 document.addEventListener('dblclick', e => {
   const row = e.target.closest('.row'); if (!row || e.target.closest('button,a')) return;
+  const qbox = row.parentElement?.dataset.sort;
+  if (qbox?.startsWith('queue-')) { queueJump(qbox.slice(6), +row.dataset.i); return; }
   const ids = S.lists[row.dataset.list] || [row.dataset.id];
   setContext(ids, +row.dataset.i, { label: sourceLabelForRoute() });
 });
 document.addEventListener('click', e => { // the number cell's play glyph
   const p = e.target.closest('.row .num'); if (!p) return;
   const row = p.closest('.row'); const ids = S.lists[row.dataset.list] || [row.dataset.id];
+  const qbox = row.parentElement?.dataset.sort;
+  if (qbox?.startsWith('queue-')) { queueJump(qbox.slice(6), +row.dataset.i); return; }
   if (P.cur?.id === row.dataset.id) togglePlay(); else setContext(ids, +row.dataset.i, { label: sourceLabelForRoute() });
 });
 document.addEventListener('keydown', e => {
@@ -1527,7 +1661,13 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('contextmenu', e => {
   const row = e.target.closest('.row,.mini'); if (row?.dataset.id) { e.preventDefault(); trackMenu(row.dataset.id, e.clientX, e.clientY, route.name === 'playlist' ? route.arg : null); return; }
-  const li = e.target.closest('.lib-item[data-pl]'); if (li) { e.preventDefault(); playlistMenu(li.dataset.pl, e.clientX, e.clientY); }
+  const li = e.target.closest('.lib-item[data-pl]'); if (li) { e.preventDefault(); playlistMenu(li.dataset.pl, e.clientX, e.clientY); return; }
+  const cd = e.target.closest('.card[data-kind]');
+  if (cd && ['album', 'mix', 'artist', 'playlist'].includes(cd.dataset.kind)) {
+    e.preventDefault();
+    if (cd.dataset.kind === 'playlist') playlistMenu(cd.dataset.key, e.clientX, e.clientY);
+    else sourceMenu(`${cd.dataset.kind}:${cd.dataset.key}`, e.clientX, e.clientY);
+  }
 });
 document.addEventListener('mouseover', e => { // seek bar gets the accent while dragging too
   if (e.target === $('#seek')) $('#seek').style.setProperty('--p', $('#seek').value / 10 + '%');
