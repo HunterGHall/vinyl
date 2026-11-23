@@ -37,6 +37,8 @@ static PATHS: OnceLock<Paths> = OnceLock::new();
 /// Bumped whenever a file that feeds the library list (play counts, edited names/albums, loudness)
 /// is written, so the cached list knows it is out of date.
 pub static DATA_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Bumped when metadata.json (names, albums) is written, so the app notices edits without re-reading the whole library.
+pub static META_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Where the library lives when `MUSIC_HOME` isn't set: the current directory if it already holds
 /// a library (running from a checkout), otherwise `%LOCALAPPDATA%\Vinyl` so an installed copy
@@ -157,6 +159,9 @@ pub fn write_json(path: &Path, data: &Value, pretty: bool, backup: bool) -> std:
         fs::rename(&tmp, path)
     })();
     let _ = fs::remove_file(&tmp);
+    if result.is_ok() && name == "metadata.json" {
+        META_VERSION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
     if result.is_ok() && matches!(name.as_str(), "stats.json" | "metadata.json" | "loudness.json") {
         DATA_VERSION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }

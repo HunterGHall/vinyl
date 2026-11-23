@@ -22,6 +22,25 @@ use std::sync::LazyLock;
 // artist, and nearly the same length. Merging keeps one copy and moves the
 // others' play counts and playlist spots onto it.
 
+// A file's hash only changes if the file does, so scans after the first reuse it: the size and
+// modified time are checked, and a changed file is hashed again.
+static HASH_CACHE: LazyLock<Mutex<HashMap<PathBuf, (u64, std::time::SystemTime, String)>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn cached_sha1(path: &Path) -> std::io::Result<String> {
+    let meta = std::fs::metadata(path)?;
+    let stamp = (meta.len(), meta.modified().ok());
+    if let (Some(mtime), Some((size, cached_mtime, hash))) = (stamp.1, HASH_CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(path)) {
+        if *size == stamp.0 && *cached_mtime == mtime {
+            return Ok(hash.clone());
+        }
+    }
+    let hash = file_sha1(path)?;
+    if let Some(mtime) = stamp.1 {
+        HASH_CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(path.to_path_buf(), (stamp.0, mtime, hash.clone()));
+    }
+    Ok(hash)
+}
+
 fn file_sha1(path: &Path) -> std::io::Result<String> {
     let mut f = std::fs::File::open(path)?;
     let mut hasher = Sha1::new();
@@ -90,7 +109,7 @@ pub fn find_duplicate_groups() -> Vec<Value> {
     for idxs in by_size.values().filter(|v| v.len() > 1) {
         let mut by_hash: HashMap<String, Vec<usize>> = HashMap::new();
         for &i in idxs {
-            if let Ok(h) = file_sha1(&items[i].path) {
+            if let Ok(h) = cached_sha1(&items[i].path) {
                 hashes.insert(i, h.clone());
                 by_hash.entry(h).or_default().push(i);
             }

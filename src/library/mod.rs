@@ -808,6 +808,15 @@ fn library_key() -> LibraryKey {
     (modified(&paths().library), modified(&paths().covers), store::DATA_VERSION.load(Ordering::SeqCst))
 }
 
+/// A short fingerprint of the song list: it changes when songs are added, removed or renamed, but not
+/// when only play counts change. The app polls this instead of downloading the whole library.
+pub fn library_sig() -> String {
+    let nanos = |p: &Path| {
+        fs::metadata(p).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos())
+    };
+    format!("{}-{}-{}", nanos(&paths().library), nanos(&paths().covers), store::META_VERSION.load(Ordering::SeqCst))
+}
+
 /// The library as JSON bytes, ready to send.
 pub fn library_json() -> std::sync::Arc<Vec<u8>> {
     let key = library_key(); // taken before building: a change while building means the next call rebuilds

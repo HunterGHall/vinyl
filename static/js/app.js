@@ -102,9 +102,13 @@ async function loadSettings() {
     if (changed && route?.name === 'settings') renderSettings(); // the page may have drawn with defaults first
   } catch { S.settings = S.settings || {}; }
 }
+/* A tiny fingerprint of the song list; the 30 second poll compares it instead of downloading the library. */
+async function fetchSig() { try { return (await api('/api/library/sig')).sig; } catch { return null; } }
 async function loadAll() {
   loadSettings(); // not awaited: the library paints first; applyVolume reads it when it arrives
+  const sigP = fetchSig(); // asked before the data, so a change while loading is caught by the next poll
   const d = await fetchData();
+  S.libSig = await sigP;
   applyData(d);
   lsSet('vinyl.data', d); // the next start paints from this while the server is still answering
 }
@@ -2043,17 +2047,22 @@ const skeletonHTML = () => `<div class="skel"><div class="skel-title"></div><div
   // 2. Ask the server for the real data and the saved player state, in parallel.
   let fresh, serverState = null;
   loadSettings(); // volume levelling and lyrics switches; redraws Settings itself if it is open
+  const sigP = fetchSig();
   try { [fresh, serverState] = await Promise.all([fetchData(), api('/api/state').catch(() => null)]); }
   catch (e) { if (!painted) $('#view').innerHTML = `<div class="empty"><b>Can't reach the Vinyl server</b>${esc(e.message)}</div>`; return; }
   lsSet('vinyl.data', fresh);
+  S.libSig = await sigP;
   if (!painted) { applyData(fresh); firstPaint(serverState || lsGet('vinyl.state', null)); }
   else if (dataSig(fresh) !== dataSig(cached)) { applyData(fresh); renderLibrary(); renderRoute(true); renderBarTrack(); }
   else applyData(fresh); // same on screen: just refresh the numbers (plays, durations) without redrawing
 
-  mediaKeyLoop();
+  setTimeout(mediaKeyLoop, 1500); // after the first screen is up
   setTimeout(() => checkForUpdate(), 2500); // ask GitHub whether there is a newer release
-  setInterval(() => { // pick up songs added outside the app (downloads finishing, new files)
+  setInterval(async () => { // pick up songs added or renamed outside the app (downloads finishing, new files)
     if (document.hidden) return;
-    api('/api/library').then(ts => { const withAlbum = x => x.filter(t => t.album).length; if (ts.length !== S.tracks.length || withAlbum(ts) !== withAlbum(S.tracks)) loadAll().then(() => { renderLibrary(); if (['home', 'library', 'albums', 'album'].includes(route.name)) renderRoute(true); }); }).catch(() => { });
+    const sig = await fetchSig();
+    if (!sig || sig === S.libSig) return; // nothing changed: no download, no redraw
+    await loadAll(); renderLibrary();
+    if (['home', 'library', 'albums', 'album'].includes(route.name)) renderRoute(true);
   }, 30000);
 })();

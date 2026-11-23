@@ -40,7 +40,11 @@ fn port() -> u16 {
 
 fn run_web() -> Result<(), String> {
     library::start_background_tasks();
-    library::scan_loudness_async();
+    // Measuring loudness runs ffmpeg over every new song: let the first screen load before starting it.
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        library::scan_loudness_async();
+    });
     routes::serve(port())
 }
 

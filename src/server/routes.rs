@@ -183,6 +183,7 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
         },
 
         // ---- library ----
+        (Method::Get, ["api", "library", "sig"]) => ok(json!({"sig": library_sig()})),
         (Method::Get, ["api", "library"]) => bytes_resp(200, "application/json", library_json().to_vec()),
         (Method::Patch, ["api", "tracks", id, "meta"]) => edit_track_meta(id, &b()),
         (Method::Get, ["api", "tracks", id, "loudness"]) => match safe_track_path(id) {
