@@ -1,6 +1,6 @@
 //! Small helpers: text munging, HTTP with retries, subprocess setup.
 
-use crate::store;
+use crate::base::store;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use regex_lite::Regex;
 use std::io::Read;
@@ -73,7 +73,7 @@ pub fn command(program: &str) -> Command {
     c.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
     // yt-dlp and ffmpeg are often installed where an app started from the Start menu doesn't look
     // (winget's folders, Chocolatey, Scoop...), so add the places that hold them to its PATH.
-    let extra = crate::deps::extra_dirs();
+    let extra = crate::system::deps::extra_dirs();
     if !extra.is_empty() {
         let mut paths: Vec<std::path::PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
         for d in extra {

@@ -5,9 +5,10 @@ use crate::library::{
     self, add_track_to_playlist_record, cover_path_for, create_playlist_record, existing_for_source, file_name,
     file_stem, record_source, remember_real_names, rename_playlist_record, source_key,
 };
-use crate::store::{self, paths};
-use crate::util::{self, download_image, is_spotify_playlist_url, is_spotify_url, sanitize_filename};
-use crate::{deps, lyrics, spotify};
+use crate::base::store::{self, paths};
+use crate::base::util::{self, download_image, is_spotify_playlist_url, is_spotify_url, sanitize_filename};
+use crate::system::deps;
+use crate::music::{lyrics, spotify};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};

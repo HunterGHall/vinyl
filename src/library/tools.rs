@@ -1,12 +1,12 @@
 //! Library tools: duplicate finding/merging, name fixing, and the Spotify
 //! playlist watcher.
 
-use crate::download::{self, Job, youtube_track_fields};
+use crate::music::download::{self, Job, youtube_track_fields};
 use crate::library::*;
-use crate::lyrics::{clean_title, first_artist};
-use crate::store::{self, lock, paths, save};
-use crate::spotify;
-use crate::util::{self, words};
+use crate::music::lyrics::{clean_title, first_artist};
+use crate::base::store::{self, lock, paths, save};
+use crate::music::spotify;
+use crate::base::util::{self, words};
 use regex_lite::Regex;
 use serde_json::{Value, json};
 use sha1::{Digest, Sha1};

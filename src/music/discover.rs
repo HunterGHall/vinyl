@@ -3,8 +3,8 @@
 //! in the same shape as catalog search results, so they can be downloaded through
 //! the normal catalog job, and carry a 30 s `preview` URL for instant listening.
 
-use crate::download;
-use crate::util;
+use crate::music::download;
+use crate::base::util;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};

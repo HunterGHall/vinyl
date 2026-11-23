@@ -3,7 +3,7 @@
 //! downloaded, checked against GitHub's SHA-256 for the asset, and run (the installer
 //! closes this app, replaces it and starts the new version).
 
-use crate::util;
+use crate::base::util;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
@@ -96,7 +96,7 @@ pub fn install() -> bool {
     set_state(json!({"status": "downloading", "done": 0, "total": 0}));
     std::thread::spawn(|| {
         if let Err(e) = download_and_run() {
-            crate::store::error(format!("Update failed: {e}"));
+            crate::base::store::error(format!("Update failed: {e}"));
             set_state(json!({"status": "error", "error": e}));
         }
     });

@@ -3,8 +3,8 @@
 //! from the file's own tags when it has one) and album name.
 
 use crate::library::{self, AUDIO_EXTS, file_name};
-use crate::store::{self, paths};
-use crate::util::{self, sanitize_filename};
+use crate::base::store::{self, paths};
+use crate::base::util::{self, sanitize_filename};
 use serde_json::{Value, json};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -100,7 +100,7 @@ pub fn receive(name: &str, reader: &mut dyn Read) -> Result<Value, String> {
         library::remember_album(&final_path, &tags.album);
         library::scan_loudness_async();
         library::backfill_albums_async();
-        crate::lyrics::prefetch_async(vec![id.clone()]);
+        crate::music::lyrics::prefetch_async(vec![id.clone()]);
         Ok(json!({"id": id, "title": title, "artist": artist, "album": tags.album, "duplicate": false}))
     })();
     let _ = std::fs::remove_file(&tmp);

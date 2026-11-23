@@ -3,8 +3,8 @@
 //! a week, or as soon as the song's name changes).
 
 use crate::library::{self, file_name, name_fields, track_duration};
-use crate::store::{self, lock, paths};
-use crate::util::{quote_all, words};
+use crate::base::store::{self, lock, paths};
+use crate::base::util::{quote_all, words};
 use regex_lite::Regex;
 use serde_json::{Value, json};
 use sha1::{Digest, Sha1};
@@ -72,7 +72,7 @@ fn parse_lrc(text: &str) -> Vec<Value> {
 fn search(params: &[(&str, &str)]) -> Result<Vec<Value>, String> {
     let query: Vec<String> = params.iter().map(|(k, v)| format!("{k}={}", quote_all(v))).collect();
     let url = format!("{LRCLIB_URL}?{}", query.join("&"));
-    let resp = crate::util::agent().get(&url)
+    let resp = crate::base::util::agent().get(&url)
         .set("User-Agent", "music-player-local/1.0 (personal project)")
         .timeout(Duration::from_secs(10))
         .call()

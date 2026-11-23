@@ -1,8 +1,11 @@
 //! The library: tracks on disk plus the JSON records that describe them
 //! (metadata, play counts, loudness, download sources, settings, playlists).
 
-use crate::store::{self, lock, paths, read_arr, read_obj, save};
-use crate::util::{self, quote, words};
+pub mod import;
+pub mod tools;
+
+use crate::base::store::{self, lock, paths, read_arr, read_obj, save};
+use crate::base::util::{self, quote, words};
 use regex_lite::Regex;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -663,7 +666,7 @@ pub fn delete_tracks(track_ids: &[String]) -> usize {
         }
     }
     for id in &ids {
-        let _ = fs::remove_file(crate::lyrics::cache_path(id));
+        let _ = fs::remove_file(crate::music::lyrics::cache_path(id));
     }
     let _g = LOUDNESS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut loudness = load_loudness();
@@ -724,11 +727,11 @@ fn lookup_album(title: &str, artist: &str, duration: f64) -> Option<String> {
     let url = format!("https://itunes.apple.com/search?media=music&entity=song&limit=8&term={}", util::quote_all(term.trim()));
     let text = util::http_get_text(&url, 12, 2).ok()?;
     let v: Value = serde_json::from_str(&text).ok()?;
-    let (want_title, want_artist) = (words(&crate::lyrics::clean_title(title)), words(&crate::lyrics::first_artist(artist)));
+    let (want_title, want_artist) = (words(&crate::music::lyrics::clean_title(title)), words(&crate::music::lyrics::first_artist(artist)));
     let mut best: Option<(f64, String)> = None;
     for r in v["results"].as_array()? {
         let (Some(t), Some(a), Some(album)) = (r["trackName"].as_str(), r["artistName"].as_str(), r["collectionName"].as_str()) else { continue };
-        if words(&crate::lyrics::clean_title(t)) != want_title {
+        if words(&crate::music::lyrics::clean_title(t)) != want_title {
             continue;
         }
         let ra = words(a);

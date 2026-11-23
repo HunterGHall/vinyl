@@ -1,7 +1,7 @@
 //! Reading Spotify links without credentials: oEmbed plus the public embed page.
 
-use crate::store;
-use crate::util::{http_get_text, quote_all};
+use crate::base::store;
+use crate::base::util::{http_get_text, quote_all};
 use regex_lite::Regex;
 use serde_json::{Map, Value};
 use std::sync::LazyLock;

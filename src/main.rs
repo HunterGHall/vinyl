@@ -5,24 +5,32 @@
 //! into playlists and play them back - all stored locally. Needs `yt-dlp`,
 //! `ffmpeg` and `ffprobe` on PATH.
 //!
-//!   music-rs          open the desktop window
-//!   music-rs --web    just serve http://127.0.0.1:8735 for a browser
+//!   vinyl          open the desktop window
+//!   vinyl --web    just serve http://127.0.0.1:8735 for a browser
 //!
-//! The library and data live in `$MUSIC_HOME` (default: the current directory).
+//! The library and data live in `$MUSIC_HOME` (default: the current directory, or
+//! `%LOCALAPPDATA%\Vinyl` for an installed copy).
+//!
+//! Source layout:
+//!
+//!   base/      where data lives and how it is saved (`store`), shared helpers (`util`)
+//!   library/   songs, playlists, likes, history (`mod`), adding files (`import`), clean-up tools (`tools`)
+//!   music/     online sources: downloads, lyrics, Spotify links, discovery
+//!   server/    the local web server and its API (`routes`)
+//!   system/    this computer: yt-dlp/ffmpeg (`deps`), media keys, self-update
 
-mod deps;
-mod discover;
-mod download;
-mod import;
+mod base;
 mod library;
-mod mediakeys;
-mod lyrics;
-mod routes;
-mod spotify;
-mod store;
-mod tools;
-mod update;
-mod util;
+mod music;
+mod server;
+mod system;
+
+use base::store;
+#[cfg(all(feature = "desktop", windows))]
+use base::util;
+use library::tools;
+use server::routes;
+use system::mediakeys;
 
 const DEFAULT_PORT: u16 = 8735;
 

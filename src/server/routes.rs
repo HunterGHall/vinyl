@@ -1,9 +1,11 @@
 //! The HTTP server: static files, media, and the JSON API the frontend talks to.
 
 use crate::library::*;
-use crate::store::{self, lock, paths};
-use crate::util::{clip, is_spotify_playlist_url, unquote};
-use crate::{deps, discover, download, lyrics, mediakeys, tools, update};
+use crate::base::store::{self, lock, paths};
+use crate::base::util::{clip, is_spotify_playlist_url, unquote};
+use crate::system::{deps, mediakeys, update};
+use crate::music::{discover, download, lyrics};
+use crate::library::tools;
 use serde_json::{Map, Value, json};
 use std::fs;
 use std::io::{Cursor, Read, Seek, SeekFrom};
@@ -719,7 +721,7 @@ fn handle(mut req: Request) {
     // reading it into memory like the small JSON bodies below.
     if method == Method::Post && path == "/api/upload" {
         let name = unquote(query_param(query, "name").unwrap_or(""));
-        let resp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::import::receive(&name, req.as_reader()))) {
+        let resp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::library::import::receive(&name, req.as_reader()))) {
             Ok(Ok(v)) => ok(v),
             Ok(Err(e)) => err(400, &e),
             Err(_) => err(500, "Internal error"),

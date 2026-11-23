@@ -2,7 +2,7 @@
 //! and measure). An app started from the Start menu often doesn't have the folders winget put
 //! them in on its PATH, so this looks in the usual places too, and can install what is missing.
 
-use crate::util;
+use crate::base::util;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
