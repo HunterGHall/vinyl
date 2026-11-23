@@ -69,11 +69,13 @@ const hash32 = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) h =
 const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const shuffled = (arr, r = Math.random) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
+/* One toast per message: repeating it (clicking "Check for updates" over and over) restarts the same toast instead of stacking another. */
 function toast(msg) {
-  const el = document.createElement('div');
-  el.className = 'toast'; el.textContent = msg;
-  $('#toasts').append(el);
-  setTimeout(() => el.remove(), 2800);
+  const box = $('#toasts');
+  let el = [...box.children].find(t => t.textContent === msg);
+  if (el) { clearTimeout(el._t); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; }
+  else { el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; box.append(el); }
+  el._t = setTimeout(() => el.remove(), 2800);
 }
 
 /* ------------------------------------------------------------------ data */
@@ -846,7 +848,13 @@ function renderLiked() {
   $('#view').style.setProperty('--hue', '#7a3418');
 }
 /* ---- app updates (the server asks GitHub for the latest release) ---- */
+let updateChecking = false;
 async function checkForUpdate({ manual = false } = {}) {
+  if (updateChecking) return null; // already looking: extra clicks don't start more checks, toasts or dialogs
+  updateChecking = true;
+  try { return await checkForUpdate_({ manual }); } finally { updateChecking = false; }
+}
+async function checkForUpdate_({ manual }) {
   let info;
   try { info = await api('/api/update'); }
   catch (e) { if (manual) toast(e.message); return null; }
