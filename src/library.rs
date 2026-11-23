@@ -266,23 +266,90 @@ pub fn record_play(track_id: &str) -> i64 {
     let n = stats[track_id].as_i64().unwrap_or(0) + 1;
     stats[track_id] = json!(n);
     save_stats(&stats);
-    // Timestamped listening history (newest last, capped) feeds "recently
-    // played" and the recommendations.
-    let mut history = read_arr(&paths().history);
-    if let Some(h) = history.as_array_mut() {
-        h.push(json!({"id": track_id, "at": store::now()}));
-        if h.len() > HISTORY_CAP {
-            h.drain(..h.len() - HISTORY_CAP);
-        }
-    }
-    save(&paths().history, &history);
+    // Timestamped listening history (newest last, capped) feeds "recently played" and the
+    // recommendations. It is only ever appended to: one short line per play.
+    append_history(track_id);
     n
 }
 
 const HISTORY_CAP: usize = 2000;
 
+// ---------------- listening history ----------------
+// data/history.jsonl: one {"id", "at"} object per line, oldest first. A play appends one line (no
+// rewriting of the whole file); once it has grown well past HISTORY_CAP it is trimmed back.
+
+static HISTORY_LINES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(usize::MAX); // usize::MAX = not counted yet
+
+/// Older versions kept history as one JSON array in history.json: convert it once.
+fn migrate_history() {
+    let legacy = paths().data.join("history.json");
+    if paths().history.exists() || !legacy.is_file() {
+        return;
+    }
+    let entries: Vec<Value> = read_arr(&legacy).as_array().cloned().unwrap_or_default();
+    write_history(&entries);
+    let _ = fs::rename(&legacy, paths().data.join("history.json.migrated"));
+}
+
+fn write_history(entries: &[Value]) {
+    let mut text = String::new();
+    for e in entries {
+        text.push_str(&e.to_string());
+        text.push('\n');
+    }
+    let tmp = paths().history.with_extension("jsonl.tmp");
+    if fs::write(&tmp, text).is_ok() && fs::rename(&tmp, &paths().history).is_ok() {
+        HISTORY_LINES.store(entries.len(), std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+fn append_history(track_id: &str) {
+    use std::io::Write;
+    use std::sync::atomic::Ordering;
+    migrate_history();
+    // After a crash the file may end in a half-written line: start the first new line of this run on a fresh one.
+    static CHECKED_END: AtomicBool = AtomicBool::new(false);
+    let mut prefix = "";
+    if !CHECKED_END.swap(true, Ordering::SeqCst) {
+        use std::io::{Read, Seek, SeekFrom};
+        if let Ok(mut f) = fs::File::open(&paths().history) {
+            let mut last = [0u8; 1];
+            if f.seek(SeekFrom::End(-1)).is_ok() && f.read_exact(&mut last).is_ok() && last[0] != b'\n' {
+                prefix = "\n";
+            }
+        }
+    }
+    let line = format!("{prefix}{}\n", json!({"id": track_id, "at": store::now()}));
+    let appended = fs::OpenOptions::new().create(true).append(true).open(&paths().history).and_then(|mut f| f.write_all(line.as_bytes()));
+    if let Err(e) = appended {
+        store::error(format!("Couldn't write the listening history: {e}"));
+        return;
+    }
+    let mut lines = HISTORY_LINES.load(Ordering::SeqCst);
+    lines = if lines == usize::MAX { load_history().as_array().map_or(1, |a| a.len()) } else { lines + 1 };
+    HISTORY_LINES.store(lines, Ordering::SeqCst);
+    if lines > HISTORY_CAP + HISTORY_CAP / 4 {
+        let all = load_history();
+        if let Some(a) = all.as_array() {
+            write_history(&a[a.len().saturating_sub(HISTORY_CAP)..]);
+        }
+    }
+}
+
+/// The most recent plays, oldest first. A half-written last line (a crash mid-append) is skipped.
 pub fn load_history() -> Value {
-    read_arr(&paths().history)
+    migrate_history();
+    let text = fs::read_to_string(&paths().history).unwrap_or_default();
+    let mut entries: Vec<Value> = text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    if entries.len() > HISTORY_CAP {
+        entries.drain(..entries.len() - HISTORY_CAP);
+    }
+    Value::Array(entries)
+}
+
+/// Forget all listening history.
+pub fn clear_history() {
+    write_history(&[]);
 }
 
 // ---------------- likes ----------------
@@ -580,14 +647,18 @@ pub fn delete_tracks(track_ids: &[String]) -> usize {
     }
     {
         let _g = lock();
-        for (path, key) in [(paths().likes.clone(), "id"), (paths().history.clone(), "id")] {
-            let mut list = read_arr(&path);
-            if let Some(a) = list.as_array_mut() {
-                let before = a.len();
-                a.retain(|e| !e[key].as_str().is_some_and(gone));
-                if a.len() != before {
-                    save(&path, &list);
-                }
+        let mut likes = load_likes();
+        if let Some(a) = likes.as_array_mut() {
+            let before = a.len();
+            a.retain(|e| !e["id"].as_str().is_some_and(gone));
+            if a.len() != before {
+                save(&paths().likes, &likes);
+            }
+        }
+        if let Some(entries) = load_history().as_array() {
+            let kept: Vec<Value> = entries.iter().filter(|e| !e["id"].as_str().is_some_and(gone)).cloned().collect();
+            if kept.len() != entries.len() {
+                write_history(&kept);
             }
         }
     }
@@ -713,4 +784,41 @@ pub fn backfill_albums_async() {
         }
         ALBUMS_RUNNING.store(false, Ordering::SeqCst);
     });
+}
+
+// ---------------- cached library list ----------------
+// GET /api/library is asked for at start-up, every 30 s by the page and after every import, and
+// building it means reading three JSON files plus one stat per song. The finished JSON is kept in
+// memory and rebuilt only when a song or cover file was added or removed (the folders' modified
+// times changed) or a file that feeds the list was written (DATA_VERSION). A minute is the longest
+// it is ever reused, in case something changed in a way those can't see.
+
+type LibraryKey = (Option<std::time::SystemTime>, Option<std::time::SystemTime>, u64);
+struct CachedLibrary {
+    key: LibraryKey,
+    at: std::time::Instant,
+    body: std::sync::Arc<Vec<u8>>,
+}
+static LIBRARY_CACHE: Mutex<Option<CachedLibrary>> = Mutex::new(None);
+
+fn library_key() -> LibraryKey {
+    let modified = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
+    (modified(&paths().library), modified(&paths().covers), store::DATA_VERSION.load(Ordering::SeqCst))
+}
+
+/// The library as JSON bytes, ready to send.
+pub fn library_json() -> std::sync::Arc<Vec<u8>> {
+    let key = library_key(); // taken before building: a change while building means the next call rebuilds
+    if let Some(c) = LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if c.key == key && c.at.elapsed() < std::time::Duration::from_secs(60) {
+            return c.body.clone();
+        }
+    }
+    let (stats, loudness, meta) = (load_stats(), load_loudness(), load_meta());
+    let tracks = find_track_paths();
+    warm_durations(&tracks);
+    let list: Vec<Value> = tracks.iter().map(|t| track_to_dict(t, &stats, &loudness, &meta)).collect();
+    let body = std::sync::Arc::new(serde_json::to_vec(&Value::Array(list)).unwrap_or_default());
+    *LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner()) = Some(CachedLibrary { key, at: std::time::Instant::now(), body: body.clone() });
+    body
 }

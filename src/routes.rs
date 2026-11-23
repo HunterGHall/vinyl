@@ -181,12 +181,7 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
         },
 
         // ---- library ----
-        (Method::Get, ["api", "library"]) => {
-            let (stats, loudness, meta) = (load_stats(), load_loudness(), load_meta());
-            let tracks = find_track_paths();
-            warm_durations(&tracks);
-            ok(Value::Array(tracks.iter().map(|t| track_to_dict(t, &stats, &loudness, &meta)).collect()))
-        }
+        (Method::Get, ["api", "library"]) => bytes_resp(200, "application/json", library_json().to_vec()),
         (Method::Patch, ["api", "tracks", id, "meta"]) => edit_track_meta(id, &b()),
         (Method::Get, ["api", "tracks", id, "loudness"]) => match safe_track_path(id) {
             Some(f) if f.is_file() => ok(json!({"gain_db": ensure_loudness(&f)})),
@@ -216,7 +211,7 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
         (Method::Delete, ["api", "history"]) => {
             let _g = lock();
             let _ = store::write_json(&paths().likes, &json!([]), true, true);
-            let _ = store::write_json(&paths().history, &json!([]), true, true);
+            clear_history();
             save_stats(&json!({}));
             empty(204)
         }
@@ -544,7 +539,7 @@ fn delete_all_tracks() -> Resp {
         let empty_obj = json!({});
         save_stats(&empty_obj);
         let _ = store::write_json(&paths().likes, &json!([]), true, true);
-        let _ = store::write_json(&paths().history, &json!([]), true, true);
+        clear_history();
         let _ = store::write_json(&paths().sources, &empty_obj, true, true);
         let _ = store::write_json(&paths().loudness, &empty_obj, true, true);
         save_meta(&empty_obj);

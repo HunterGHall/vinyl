@@ -35,6 +35,10 @@ pub struct Paths {
 
 static PATHS: OnceLock<Paths> = OnceLock::new();
 
+/// Bumped whenever a file that feeds the library list (play counts, edited names/albums, loudness)
+/// is written, so the cached list knows it is out of date.
+pub static DATA_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// Where the library lives when `MUSIC_HOME` isn't set: the current directory if it already holds
 /// a library (running from a checkout), otherwise `%LOCALAPPDATA%\Vinyl` so an installed copy
 /// keeps its music and settings outside the program folder and across updates.
@@ -67,7 +71,7 @@ pub fn init() -> &'static Paths {
             playlists: data.join("playlists.json"),
             stats: data.join("stats.json"),
             likes: data.join("likes.json"),
-            history: data.join("history.json"),
+            history: data.join("history.jsonl"), // one JSON object per line, appended to on every play
             settings: data.join("settings.json"),
             sources: data.join("sources.json"),
             sync: data.join("spotify_sync.json"),
@@ -155,6 +159,9 @@ pub fn write_json(path: &Path, data: &Value, pretty: bool, backup: bool) -> std:
         fs::rename(&tmp, path)
     })();
     let _ = fs::remove_file(&tmp);
+    if result.is_ok() && matches!(name.as_str(), "stats.json" | "metadata.json" | "loudness.json") {
+        DATA_VERSION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
     result
 }
 
