@@ -37,6 +37,7 @@ fn run_web() -> Result<(), String> {
     routes::serve(port())
 }
 
+#[cfg(feature = "desktop")]
 fn wait_for_server() {
     for _ in 0..60 {
         if std::net::TcpStream::connect(("127.0.0.1", port())).is_ok() {

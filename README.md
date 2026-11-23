@@ -1,44 +1,75 @@
-# Vinyl
+<p align="center">
+  <img src="assets/logo/icon-256.png" alt="Vinyl logo" width="120">
+</p>
 
-A local music player for Windows: your own songs, recommendations, new music from similar artists, and a record that spins on the Now Playing page. Rust server (`tiny_http`) in a `wry` desktop window, built on [music-rs](../music-rs).
+<h1 align="center">Vinyl</h1>
+
+<p align="center"><b>A local music player that keeps the record spinning.</b></p>
+
+<p align="center">
+Your own songs on Windows, with Daily Mixes, new music from similar artists, and a spinning ASCII vinyl on the Now Playing page. Add music from YouTube and Spotify links, and Vinyl keeps itself up to date.
+</p>
+
+<div align="center">
+
+[![Release](https://img.shields.io/github/v/release/HunterGHall/vinyl?label=release)](https://github.com/HunterGHall/vinyl/releases)
+[![License](https://img.shields.io/github/license/HunterGHall/vinyl)](LICENSE)
+[![Build](https://github.com/HunterGHall/vinyl/actions/workflows/release.yml/badge.svg)](https://github.com/HunterGHall/vinyl/actions/workflows/release.yml)
+[![Rust](https://img.shields.io/badge/rust-2024_edition-orange?logo=rust)](Cargo.toml)
+[![WebView2](https://img.shields.io/badge/WebView2-0078D7?logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCc+PHBhdGggZmlsbD0nd2hpdGUnIGQ9J00zIDNoOC41djguNUgzek0xMi41IDNIMjF2OC41aC04LjV6TTMgMTIuNWg4LjVWMjFIM3pNMTIuNSAxMi41SDIxVjIxaC04LjV6Jy8+PC9zdmc+)](https://developer.microsoft.com/microsoft-edge/webview2/)
+
+</div>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#running-from-source">Running from source</a> ·
+  <a href="#releasing-a-new-version">Releasing</a> ·
+  <a href="https://github.com/HunterGHall/vinyl/releases">Releases</a>
+</p>
 
 ## Install
 
-Download **vinyl-setup.exe** from the [latest release](https://github.com/HunterGHall/vinyl/releases/latest) and run it. It installs for your user (no admin prompt) and can set up `yt-dlp` and `ffmpeg` with winget, which Vinyl uses to add music. It needs the Microsoft Edge WebView2 runtime, which comes with Windows 11.
+Download **`vinyl-setup.exe`** from the [latest release](https://github.com/HunterGHall/vinyl/releases/latest) and run it.
 
-Your songs, playlists and settings live in `%LOCALAPPDATA%\Vinyl`, so updates and uninstalling never touch them.
+## Features
 
-**Updates:** each time Vinyl starts it checks the latest GitHub release. If there is a newer version it asks whether to install it; saying yes downloads `vinyl-setup.exe`, verifies its SHA-256 against GitHub's, runs it, and Vinyl reopens updated. Settings has a "Check for updates" button.
+**Your library**
+- Add songs from YouTube or Spotify links, or search the catalog and press Add.
+- Importing a playlist asks whether to keep it as a playlist or just add its songs, and the progress bar moves with every song.
+- Playlists, Liked Songs, a queue, and album names for your songs (looked up in the background), with an Albums page.
+- Time-synced lyrics, volume levelling, and keyboard **media keys** (play/pause, next, previous, stop) that work even when Vinyl is in the background.
 
-<<<<<<< HEAD
-## Releasing a new version
+**Recommendations**
+- **Made for You** Daily Mixes, built from your own plays, likes, history and playlists. Nothing leaves your computer.
+- **New Music** and **Discover**: songs from artists related to the ones you listen to, plus genre charts, using Deezer's public API. Click a song to download and play it.
+- Starting from an empty library? Pick a few genres and Vinyl builds a starter crate for you.
 
-1. Push your changes.
-2. Create a release on GitHub with a new version tag, e.g. `v0.0.2` (or just push the tag).
+**Now Playing**
+- The record is rendered as live ASCII and spins while music plays, on a platter tinted from the cover, next to big synced lyrics.
 
-GitHub Actions (`.github/workflows/release.yml`) then builds `vinyl-setup.exe` and attaches it to that release, which is what installed copies look for when they check for updates. The version comes from the tag (`v0.0.2` builds version `0.0.2`), so there is nothing to bump in `Cargo.toml`; the build stops with a clear error if the tag isn't like `v1.2.3`. You can also run the workflow by hand for an existing tag from the Actions tab.
+**Keeping it running**
+- Settings shows whether yt-dlp and ffmpeg are installed and can install them, and can reset your recommendations or delete your data.
 
-To build locally instead: `.\installeruild.ps1` makes `distinyl-setup.exe` (needs Inno Setup 6: `winget install JRSoftware.InnoSetup`), and `.\installer
-elease.ps1` also publishes it with the `gh` CLI.
+Shortcuts: `Space` play/pause, `Ctrl+←/→` previous/next, `←/→` seek 5 s, `L` like, `S` shuffle, `/` search, `Esc` closes Now Playing.
 
 ## Running from source
 
+You need [Rust](https://rustup.rs), plus `yt-dlp` and `ffmpeg` on your PATH (or install them from Vinyl's Settings).
+
 ```powershell
 cargo run --release           # desktop window
-cargo run --release -- --web  # just serve http://127.0.0.1:8735 (VINYL_PORT to change)
+cargo run --release -- --web  # just serve http://127.0.0.1:8735 (VINYL_PORT changes the port)
 ```
 
-From a checkout, if the current folder already has `library\` or `data\`, Vinyl uses it; otherwise it uses `%LOCALAPPDATA%\Vinyl`. Set `MUSIC_HOME` to choose a folder. `MUSIC_DEV_STATIC=1` serves `static\` from disk. `VINYL_MEDIA_KEYS=1` also enables the media keys in `--web` mode (for testing). `VINYL_RELEASES_URL` points the updater at another releases endpoint (used for testing).
+Where your data goes: if the current folder already has `library\` or `data\`, Vinyl uses it, otherwise `%LOCALAPPDATA%\Vinyl`. Set `MUSIC_HOME` to pick a folder.
 
-=======
->>>>>>> 8f77cbff8615b9462e6cd2e566ff51dca127dc9c
-## What's in it
+| Variable | What it does |
+| --- | --- |
+| `MUSIC_HOME` | Folder that holds `library\` and `data\` |
+| `MUSIC_DEV_STATIC=1` | Serve `static\` from disk, so front-end edits show on reload |
+| `VINYL_PORT` | Port for `--web` mode (default 8735) |
+| `VINYL_MEDIA_KEYS=1` | Also enable the media keys in `--web` mode |
+| `VINYL_RELEASES_URL` | Point the updater at another releases endpoint (for testing) |
 
-- **Design**: sidebar with search, a floating player dock with a little spinning record, rounded covers, one orange accent.
-- **Now Playing**: the record is rendered as live ASCII (ported from `../ascii-vinyl`, with its panel settings fixed: rotate on, 1.10 rad/s, clockwise, light 163 degrees, 1.00x, cover 300 px / radius 120 px, 5 px cells, classic characters, original colours), on a platter tinted by the cover, next to time-synced lyrics.
-- **Favorites**, **Daily Mixes**, **Discover** (Deezer related artists and genres), starting from nothing with genre picks, playlists, and **Settings** for resetting your data.
-- **Albums**: album names come from catalog downloads and are looked up in the background for everything else (iTunes). The Albums page groups your songs, songs show their album, and search finds albums.
-- **Media keys**: play/pause, next, previous and stop work system-wide, even when Vinyl is in the background (the desktop app registers them; if another app already owns them, the browser's media session is used).
-- Songs from Discover download first, then play from your library.
 
-Shortcuts: `Space` play/pause, `Ctrl+←/→` previous/next, `←/→` seek 5 s, `L` like, `S` shuffle, `/` search, `Esc` closes Now Playing.
