@@ -321,6 +321,12 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 .modal h3{font:700 22px var(--display);letter-spacing:-.02em;margin-bottom:6px}
 .modal p{color:var(--dim);margin-bottom:14px;white-space:pre-line}
 .modal .field{max-width:none;margin:8px 0 18px}
+.pick-list{max-height:320px;overflow:auto;margin:0 -6px;padding:0 6px}
+.pick{display:flex;align-items:center;gap:12px;padding:8px 6px;border-radius:8px;cursor:pointer}
+.pick:hover{background:var(--hover)}
+.pick input{width:16px;height:16px;accent-color:var(--accent);flex:none}
+.pick .pk-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.pick .pk-n{color:var(--dim);font-size:13px}
 .modal .btns{display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-top:16px}
 .modal .bar{height:6px;background:var(--raise);border-radius:6px;overflow:hidden;margin:6px 0 4px}
 .modal .bar i{display:block;height:100%;width:0;background:var(--grad);transition:width .3s}

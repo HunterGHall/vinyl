@@ -910,7 +910,7 @@ async function wipe(kind) {
 
 function renderPlaylists() {
   $('#view').innerHTML = `<h1 class="big">Playlists</h1>
-    <div class="actions" style="margin-top:18px"><button class="pill-btn" data-act="new-playlist">New playlist</button></div>
+    <div class="actions" style="margin-top:18px"><button class="pill-btn" data-act="new-playlist">New playlist</button><button class="pill-btn ghost" data-act="artist-playlists">From artists</button></div>
     ${S.playlists.length ? `<div class="grid open">${S.playlists.map(playlistCard).join('')}</div>` : '<div class="empty"><b>No playlists yet</b>Create one, then add songs from the ••• menu on any song.</div>'}`;
   $('#view').style.setProperty('--hue', '#1a120d');
 }
@@ -1566,6 +1566,55 @@ function askPlaylistChoice() {
   });
 }
 
+/* One playlist per artist: pick which artists (2+ songs, no playlist of that name yet) to turn into playlists. */
+function artistGroups() {
+  const have = new Set(S.playlists.map(p => p.name.trim().toLowerCase()));
+  const by = new Map();
+  for (const t of S.tracks) {
+    const name = primaryArtist(t.artist);
+    if (/^(unknown|various)/i.test(name)) continue;
+    const g = by.get(name.toLowerCase()) || { name, ids: [] };
+    g.ids.push(t.id); by.set(name.toLowerCase(), g);
+  }
+  return [...by.values()].filter(g => g.ids.length >= 2 && !have.has(g.name.toLowerCase())).sort((a, b) => b.ids.length - a.ids.length || a.name.localeCompare(b.name));
+}
+function askArtistPlaylists(groups) {
+  return new Promise(res => {
+    const w = $('#modal');
+    w.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="Playlists from artists"><h3>Playlists from artists</h3><p>Make a playlist for each artist you pick. Artists with a playlist already, or fewer than two songs, aren't listed.</p>
+      <div class="pick-list">${groups.map((g, i) => `<label class="pick"><input type="checkbox" value="${i}" checked><span class="pk-name">${esc(g.name)}</span><span class="pk-n">${plural(g.ids.length, 'song')}</span></label>`).join('')}</div>
+      <div class="btns"><button class="chip" data-c="">Cancel</button><button class="pill-btn" data-ok></button></div></div>`;
+    w.hidden = false;
+    const okBtn = $('[data-ok]', w), boxes = $$('input[type=checkbox]', w);
+    const picked = () => boxes.filter(b => b.checked).map(b => groups[+b.value]);
+    const sync = () => { const n = picked().length; okBtn.textContent = n ? `Create ${plural(n, 'playlist')}` : 'Create'; okBtn.disabled = !n; };
+    boxes.forEach(b => { b.onchange = sync; }); sync();
+    const done = v => { w.hidden = true; w.innerHTML = ''; modal.close = null; res(v); };
+    modal.close = () => done(null);
+    okBtn.onclick = () => done(picked());
+    $('[data-c]', w).onclick = () => done(null);
+    w.onmousedown = e => { if (e.target === w) done(null); };
+    okBtn.focus();
+  });
+}
+async function playlistsFromArtists() {
+  const groups = artistGroups();
+  if (!groups.length) { toast('No artists with two or more songs are left without a playlist'); return; }
+  const chosen = await askArtistPlaylists(groups);
+  if (!chosen?.length) return;
+  let made = 0;
+  try {
+    for (const g of chosen) {
+      const pl = await api('/api/playlists', { method: 'POST', body: { name: g.name } });
+      await api(`/api/playlists/${pl.id}/tracks`, { method: 'POST', body: { track_ids: g.ids } });
+      made++;
+    }
+  } catch (e) { toast(e.message); }
+  await refreshPlaylists();
+  if (route.name === 'playlists') renderRoute(true);
+  if (made) toast(`Created ${plural(made, 'playlist')}`);
+}
+
 async function newPlaylist() {
   const name = await modal({ title: 'Create playlist', input: `My Playlist #${S.playlists.length + 1}`, ok: 'Create' });
   if (!name) return null;
@@ -1704,6 +1753,7 @@ document.addEventListener('click', async e => {
       case 'build-library': buildLibrary(); return;
       case 'add-all-new': { const m = mixes().find(x => String(x.n) === d.n); if (m) { toast(`Adding ${mixNews(m).length} songs…`); autoAddNews(mixNews(m), null); } return; }
       case 'radio': { const tr = trackOf(d.id); if (tr) startRadio(tr); return; }
+      case 'artist-playlists': playlistsFromArtists(); return;
       case 'new-playlist': { const pl = await newPlaylist(); if (pl) go('#/playlist/' + pl.id); return; }
       case 'add-songs': pickSongs(d.pl || null); return;
       case 'pl-cover': pickPlaylistCover(d.id); return;
