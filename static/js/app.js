@@ -94,7 +94,16 @@ function applyData(d) {
   S.playlists = pinSort(d.playlists);
   S.ver++;
 }
+async function loadSettings() {
+  try {
+    const s = await api('/api/settings');
+    const changed = JSON.stringify(s) !== JSON.stringify(S.settings);
+    S.settings = s;
+    if (changed && route?.name === 'settings') renderSettings(); // the page may have drawn with defaults first
+  } catch { S.settings = S.settings || {}; }
+}
 async function loadAll() {
+  loadSettings(); // not awaited: the library paints first; applyVolume reads it when it arrives
   const d = await fetchData();
   applyData(d);
   lsSet('vinyl.data', d); // the next start paints from this while the server is still answering
@@ -328,7 +337,7 @@ function shelves() {
 
 function applyVolume() {
   let v = (P.vol / 100) ** 2;
-  if (P.cur && P.cur.gain_db != null) v *= Math.min(1, 10 ** (P.cur.gain_db / 20));
+  if (S.settings?.normalize_volume !== false && P.cur && P.cur.gain_db != null) v *= Math.min(1, 10 ** (P.cur.gain_db / 20));
   audio.volume = Math.max(0, Math.min(1, v));
   $('#vol').value = P.vol; $('#vol').style.setProperty('--p', P.vol + '%');
   $('#b-mute').innerHTML = P.vol === 0 ? ICON.mute : ICON.vol;
@@ -884,16 +893,78 @@ async function installUpdate() {
   }
 }
 
+/* ---- duplicates: find copies of the same song, pick the one to keep, remove the rest ---- */
+let dups = null;
+const dupCount = () => dups.groups.reduce((n, g) => n + g.files.length - 1, 0);
+async function renderDuplicates() {
+  const view = $('#view');
+  view.innerHTML = `<a class="back-link" href="#/settings">← Settings</a><h1 class="big">Duplicates</h1><div class="note" style="margin-top:6px">Looking for duplicate songs…</div>`;
+  view.style.setProperty('--hue', '#2d2a3a');
+  let d;
+  try { d = await api('/api/duplicates'); }
+  catch (e) { if (route.name === 'duplicates') view.innerHTML = `<a class="back-link" href="#/settings">← Settings</a><h1 class="big">Duplicates</h1><div class="note" style="margin-top:6px">${esc(e.message)} <button class="chip" data-act="find-dups">Retry</button></div>`; return; }
+  if (route.name !== 'duplicates') return;
+  dups = { groups: d.groups, keep: new Map(d.groups.map(g => [g.id, (g.files.find(f => f.keep) || g.files[0]).id])) };
+  drawDuplicates();
+}
+function drawDuplicates() {
+  const view = $('#view'); if (!dups || route.name !== 'duplicates') return;
+  const top = view.scrollTop, n = dupCount();
+  const file = (g, f) => {
+    const keep = dups.keep.get(g.id) === f.id;
+    return `<label class="dup-file ${keep ? 'keep' : ''}"><input type="radio" name="dup${g.id}" value="${esc(f.id)}" data-dup="${g.id}" ${keep ? 'checked' : ''}>${f.cover ? `<img class="dup-art" src="${esc(f.cover)}" alt="" loading="lazy">` : '<div class="dup-art"></div>'}<div class="txt"><div class="t">${esc(f.title)}<span class="s"> · ${esc(f.artist || 'Unknown artist')}</span></div><div class="s">${fmt(f.duration)} · ${(f.size / 1048576).toFixed(1)} MB · ${plural(f.plays, 'play')} · ${plural(f.playlists, 'playlist')}</div><div class="s">${esc(f.id)}</div></div><span class="dup-tag">${keep ? 'Keep' : 'Remove'}</span></label>`;
+  };
+  view.innerHTML = `<a class="back-link" href="#/settings">← Settings</a><h1 class="big">Duplicates</h1>` + (dups.groups.length
+    ? `<div class="note" style="margin-top:6px;max-width:640px">${plural(dups.groups.length, 'song')} with more than one copy. Pick the copy to keep in each group. Play counts, playlist spots and sources move to it.</div>
+      <div class="actions" style="margin-top:14px"><button class="pill-btn" data-act="merge-dups">Remove ${n} extra ${n === 1 ? 'copy' : 'copies'}</button></div>
+      ${dups.groups.map(g => `<div class="dup-group"><div class="dup-head">${esc(g.files[0].title)}<span>${g.reason === 'identical' ? 'Identical files' : 'Same song, different files'}</span></div>${g.files.map(f => file(g, f)).join('')}</div>`).join('')}`
+    : `<div class="empty"><b>No duplicates found</b>Every song in your library looks unique.</div>`);
+  view.scrollTop = top;
+}
+async function mergeDuplicates() {
+  if (!dups) return;
+  const n = dupCount(); if (!n) return;
+  if (!await modal({ title: `Remove ${n} duplicate ${n === 1 ? 'file' : 'files'}?`, text: 'The copies you did not pick are deleted from your library. Their play counts and playlist spots move to the copy you keep. This cannot be undone.', ok: 'Remove', danger: true })) return;
+  const groups = dups.groups.map(g => { const keep = dups.keep.get(g.id); return { keep, remove: g.files.filter(f => f.id !== keep).map(f => f.id) }; });
+  const gone = new Set(groups.flatMap(g => g.remove));
+  let r;
+  try { r = await api('/api/duplicates/merge', { method: 'POST', body: { groups } }); }
+  catch (e) { toast(e.message); return; }
+  const wasCur = P.cur && gone.has(P.cur.id);
+  if (wasCur) { audio.pause(); P.pos = Math.max(-1, P.order.indexOf(P.cur.id) - 1); }
+  P.ctx = P.ctx.filter(x => !gone.has(x)); P.order = P.order.filter(x => !gone.has(x)); P.userQ = P.userQ.filter(x => !gone.has(x));
+  await loadAll();
+  if (wasCur) { P.cur = null; if (P.order.length || P.userQ.length) next(false); else { audio.removeAttribute('src'); renderBarTrack(); renderNP(); } }
+  S.cache = {}; dups = null;
+  toast(`Removed ${plural(r.removed, 'duplicate')}`);
+  renderRoute(true);
+}
+document.addEventListener('change', async e => {
+  const dup = e.target.closest?.('input[data-dup]');
+  if (dup && dups) { dups.keep.set(+dup.dataset.dup, dup.value); drawDuplicates(); return; }
+  const el = e.target.closest?.('input[data-setting]'); if (!el) return;
+  const key = el.dataset.setting, val = el.checked;
+  try { S.settings = await api('/api/settings', { method: 'POST', body: { [key]: val } }); }
+  catch (err) { el.checked = !val; toast(err.message); return; }
+  if (key === 'lyrics_enabled') { lyricCache.clear(); if (S.lyrics && P.cur && !P.cur.isPv) loadLyrics(P.cur); }
+  if (key === 'normalize_volume') applyVolume();
+});
+
 function renderSettings() {
   $('#view').innerHTML = `<h1 class="big">Settings</h1>
     <div class="statline"><b>${S.tracks.length}</b> songs · <b>${S.playlists.length}</b> playlists · <b>${S.likes.size}</b> liked</div>
     <section class="shelf"><div class="shelf-head"><div><h2>Updates</h2><div class="sub">Vinyl checks for a new version each time it starts</div></div></div>
       <div class="set-row"><div><b>Version</b><div class="note" id="upd-ver">Checking…</div></div><button class="pill-btn ghost" data-act="check-update">Check for updates</button></div>
     </section>
+    <section class="shelf"><div class="shelf-head"><div><h2>Playback</h2><div class="sub">How songs sound and what shows while they play</div></div></div>
+      <div class="set-row"><div><b>Volume levelling</b><div class="note">Turns loud songs down so everything plays at a similar volume.</div></div><label class="switch"><input type="checkbox" data-setting="normalize_volume" aria-label="Volume levelling" ${S.settings?.normalize_volume !== false ? 'checked' : ''}><span></span></label></div>
+      <div class="set-row"><div><b>Lyrics</b><div class="note">Look up lyrics for your songs and show them in Now Playing.</div></div><label class="switch"><input type="checkbox" data-setting="lyrics_enabled" aria-label="Lyrics" ${S.settings?.lyrics_enabled !== false ? 'checked' : ''}><span></span></label></div>
+    </section>
     <section class="shelf"><div class="shelf-head"><div><h2>Download tools</h2><div class="sub">Vinyl uses yt-dlp to download songs and ffmpeg to convert them</div></div></div>
       <div class="set-row"><div><b>Status</b><div class="note" id="deps-status">Checking…</div></div><button class="pill-btn ghost" id="deps-btn" data-act="install-deps" hidden>Install missing tools</button></div>
     </section>
     <section class="shelf"><div class="shelf-head"><div><h2>Your data</h2><div class="sub">Everything lives in the data and library folders next to the app</div></div></div>
+      <div class="set-row"><div><b>Find duplicate songs</b><div class="note">Finds copies of the same song and lets you remove the extras. Nothing is deleted until you confirm.</div></div><button class="pill-btn ghost" data-act="find-dups">Find</button></div>
       <div class="set-row"><div><b>Refresh data files</b><div class="note">Rewrites the saved JSON files (settings, playlists, lyrics and more) in the readable, indented format. Nothing is deleted.</div></div><button class="pill-btn ghost" data-act="refresh-json">Refresh</button></div>
       <div class="set-row"><div><b>Reset recommendations</b><div class="note">Clears liked songs, listening history and play counts. Your songs and playlists stay.</div></div><button class="pill-btn ghost" data-act="reset-recs">Reset</button></div>
       <div class="set-row"><div><b>Delete all playlists</b><div class="note">Removes every playlist. Songs stay in the library.</div></div><button class="pill-btn ghost" data-act="delete-playlists">Delete</button></div>
@@ -1712,7 +1783,7 @@ async function deleteTrack(t) {
 /* ------------------------------------------------------------------ router */
 
 let route = { name: 'home', arg: '' };
-const ROUTES = ['home', 'albums', 'album', 'settings', 'playlists', 'search', 'library', 'liked', 'playlist', 'artist', 'mix', 'add', 'queue', 'discover', 'genre', 'dz'];
+const ROUTES = ['home', 'albums', 'album', 'settings', 'playlists', 'search', 'library', 'liked', 'playlist', 'artist', 'mix', 'add', 'queue', 'discover', 'genre', 'dz', 'duplicates'];
 function parseHash() {
   const [, name = 'home', ...rest] = (location.hash || '#/home').split('/');
   const arg = decodeURIComponent(rest.join('/'));
@@ -1744,6 +1815,7 @@ function renderRoute(keepScroll) {
     case 'queue': renderQueue(); break;
     case 'playlists': renderPlaylists(); break;
     case 'settings': renderSettings(); break;
+    case 'duplicates': renderDuplicates(); break;
     case 'albums': renderAlbums(); break;
     case 'album': renderAlbum(route.arg); break;
     case 'discover': renderDiscover(); break;
@@ -1794,13 +1866,13 @@ document.addEventListener('click', async e => {
       case 'play-ids': playSource(d.key); return;
       case 'install-deps': { try { await api('/api/deps/install', { method: 'POST' }); } catch (e) { toast(e.message); return; } S.depsWas = true; refreshDeps(); return; }
       case 'check-update': { const i = await checkForUpdate({ manual: true }); const el = $('#upd-ver'); if (el && i) el.textContent = `Vinyl ${i.current}${i.available ? ` · ${i.latest} is available` : ' · up to date'}`; return; }
+      case 'find-dups': go('#/duplicates'); return;
+      case 'merge-dups': mergeDuplicates(); return;
       case 'refresh-json': { actEl.disabled = true; try { const r = await api('/api/data/refresh', { method: 'POST' }); toast(`Refreshed ${r.files} files`); } catch (e) { toast(e.message); } actEl.disabled = false; return; }
       case 'reset-recs': wipe('recs'); return;
       case 'delete-playlists': wipe('playlists'); return;
       case 'delete-all': wipe('all'); return;
       case 'play-pv': playPv(d.key, actEl); return;
-      case 'add-pv': { const pt = trackOf(d.id); if (pt) addPv(pt); return; }
-      case 'play-previews': { const ids = (S.lists[d.list] || []); setContext(ids, 0, { label: d.label || 'Previews' }); return; }
       case 'add-top': { const items = (S.view?.items || []).filter(i => !owned(i)).slice(0, 10); toast(`Adding ${items.length} songs…`); autoAddNews(items, null); return; }
       case 'pick-genre': { const id = d.id; if (S.picked.has(id)) S.picked.delete(id); else S.picked.add(id); actEl.classList.toggle('picked', S.picked.has(id)); const c = $('#pick-count'); if (c) c.textContent = `${S.picked.size} picked`; return; }
       case 'build-library': buildLibrary(); return;
@@ -1976,6 +2048,7 @@ const skeletonHTML = () => `<div class="skel"><div class="skel-title"></div><div
 
   // 2. Ask the server for the real data and the saved player state, in parallel.
   let fresh, serverState = null;
+  loadSettings(); // volume levelling and lyrics switches; redraws Settings itself if it is open
   try { [fresh, serverState] = await Promise.all([fetchData(), api('/api/state').catch(() => null)]); }
   catch (e) { if (!painted) $('#view').innerHTML = `<div class="empty"><b>Can't reach the Vinyl server</b>${esc(e.message)}</div>`; return; }
   lsSet('vinyl.data', fresh);
