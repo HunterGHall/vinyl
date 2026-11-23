@@ -593,6 +593,7 @@ fn playlist_cover_path(pid: &str) -> PathBuf {
 fn playlist_public(pl: &Value) -> Value {
     let mut out = pl.clone();
     out["description"] = json!(pl["description"].as_str().unwrap_or(""));
+    out["pinned"] = json!(pl["pinned"].as_bool().unwrap_or(false));
     let cover = playlist_cover_path(pl["id"].as_str().unwrap_or(""));
     out["cover"] = if cover.is_file() {
         json!(format!("/playlist-covers/{}?v={}", file_name(&cover), mtime(&cover).unwrap_or(0.0) as i64))
@@ -623,7 +624,7 @@ fn reorder_playlists(body: &Value) -> Resp {
 }
 
 fn update_playlist(pid: &str, body: &Value) -> Resp {
-    if body.get("name").is_none() && body.get("description").is_none() {
+    if body.get("name").is_none() && body.get("description").is_none() && body.get("pinned").is_none() {
         return err(400, "Name required");
     }
     let name = body.get("name").map(|n| clip(n.as_str().map(str::to_string).unwrap_or_else(|| n.to_string()).trim(), 120));
@@ -639,6 +640,9 @@ fn update_playlist(pid: &str, body: &Value) -> Resp {
     if let Some(d) = body.get("description") {
         let d = d.as_str().map(str::to_string).unwrap_or_else(|| d.to_string());
         pl["description"] = json!(clip(d.trim(), 500));
+    }
+    if let Some(pinned) = body["pinned"].as_bool() {
+        pl["pinned"] = json!(pinned);
     }
     let out = playlist_public(pl);
     save_playlists(&playlists);

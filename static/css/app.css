@@ -64,6 +64,8 @@ img{display:block}
 .lib-item .art{width:34px;height:34px;border-radius:6px;font-size:13px}
 .lib-item .t{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lib-item .txt{min-width:0}
+.lib-item .pin{margin-left:auto;flex:none;width:14px;height:14px;color:var(--faint)}
+.lib-item .pin svg{width:14px;height:14px;fill:currentColor;display:block}
 .side-empty{padding:6px 10px;color:var(--faint);font-size:13px}
 .side-foot{border-top:1px solid var(--line);padding-top:8px;margin-top:4px}
 
@@ -346,7 +348,7 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
   .nav-link svg{width:22px;height:22px}
   .search{justify-content:center;padding:0}.search input{display:none}
   .side-head a{display:none}.side-head{justify-content:center}
-  .lib-item{justify-content:center;padding:6px 0}.lib-item .txt{display:none}
+  .lib-item{justify-content:center;padding:6px 0}.lib-item .txt{display:none}.lib-item .pin{display:none}
   .brand{justify-content:center;padding:0 0 14px}
   .dock{grid-template-columns:minmax(0,1fr) minmax(260px,1.5fr) auto}
   #vol,#b-mute{display:none}

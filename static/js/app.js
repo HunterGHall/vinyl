@@ -19,6 +19,7 @@ async function api(path, opts = {}) {
 }
 
 const ICON = {
+  pin: '<svg viewBox="0 0 24 24"><path d="M14.5 3.5l6 6-2 1-2.2 2.2.5 4.3-1.3 1.3-3.3-3.3-5.2 5.2-1-1 5.2-5.2-3.3-3.3 1.3-1.3 4.3.5L13.5 5.5z"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z"/></svg>',
   heart: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-8.5-5-8.5-11.2A4.7 4.7 0 0 1 12 6.6a4.7 4.7 0 0 1 8.5 2.7c0 6.2-8.5 11.2-8.5 11.2z"/></svg>',
@@ -88,7 +89,7 @@ function applyData(d) {
   S.by = new Map(d.tracks.map(t => [t.id, t]));
   S.likes = new Map(d.likes.filter(l => S.by.has(l.id)).map(l => [l.id, l.at]));
   S.history = d.history.filter(h => S.by.has(h.id));
-  S.playlists = d.playlists;
+  S.playlists = pinSort(d.playlists);
   S.ver++;
 }
 async function loadAll() {
@@ -97,9 +98,11 @@ async function loadAll() {
   lsSet('vinyl.data', d); // the next start paints from this while the server is still answering
 }
 /* What you can see on screen: if this hasn't changed since the cached copy, there is nothing to redraw. */
-const dataSig = d => JSON.stringify([d.tracks.map(t => [t.id, t.title, t.artist, t.album, t.cover]), d.likes.map(l => l.id), d.playlists.map(p => [p.id, p.name, p.track_ids, p.cover])]);
+const dataSig = d => JSON.stringify([d.tracks.map(t => [t.id, t.title, t.artist, t.album, t.cover]), d.likes.map(l => l.id), d.playlists.map(p => [p.id, p.name, p.track_ids, p.cover, p.pinned])]);
 
-async function refreshPlaylists() { S.playlists = await api('/api/playlists'); S.ver++; renderLibrary(); }
+/* pinned playlists come first (each group keeps its own order) */
+const pinSort = list => [...list.filter(p => p.pinned), ...list.filter(p => !p.pinned)];
+async function refreshPlaylists() { S.playlists = pinSort(await api('/api/playlists')); S.ver++; renderLibrary(); }
 
 async function toggleLike(id, force) {
   const pt = trackOf(id); if (pt?.isPv) { addPv(pt); return; }
@@ -1195,8 +1198,9 @@ async function onSort(kind, from, to) {
     catch { toast("Couldn't save the new order"); await refreshPlaylists(); renderRoute(true); }
   } else if (kind === 'playlists') {
     const ids = S.playlists.map(p => p.id); moveItem(ids, from, to);
-    S.playlists = ids.map(id => S.playlists.find(p => p.id === id)); S.ver++; renderLibrary();
-    try { await api('/api/playlists/order', { method: 'PUT', body: { ids } }); }
+    S.playlists = pinSort(ids.map(id => S.playlists.find(p => p.id === id))); S.ver++; renderLibrary();
+    const ordered = S.playlists.map(p => p.id);
+    try { await api('/api/playlists/order', { method: 'PUT', body: { ids: ordered } }); }
     catch { toast("Couldn't save the new order"); await refreshPlaylists(); }
   }
 }
@@ -1473,7 +1477,7 @@ async function renderDz(id) {
 
 function renderLibrary() {
   const el = $('#lib-list'); if (!el) return;
-  el.innerHTML = S.playlists.map(pl => `<button class="lib-item ${route.name === 'playlist' && route.arg === pl.id ? 'on' : ''}" data-href="#/playlist/${pl.id}" data-pl="${esc(pl.id)}">${playlistArt(pl)}<div class="txt"><div class="t">${esc(pl.name)}</div></div></button>`).join('')
+  el.innerHTML = S.playlists.map(pl => `<button class="lib-item ${route.name === 'playlist' && route.arg === pl.id ? 'on' : ''}" data-href="#/playlist/${pl.id}" data-pl="${esc(pl.id)}">${playlistArt(pl)}<div class="txt"><div class="t">${esc(pl.name)}</div></div>${pl.pinned ? `<span class="pin" title="Pinned">${ICON.pin}</span>` : ''}</button>`).join('')
     || '<p class="side-empty">No playlists yet</p>';
 }
 
@@ -1555,6 +1559,13 @@ function sourceMenu(key, x, y) {
   ]);
 }
 
+async function togglePin(pid) {
+  const pl = S.playlists.find(p => p.id === pid); if (!pl) return;
+  try { await api(`/api/playlists/${pid}`, { method: 'PATCH', body: { pinned: !pl.pinned } }); }
+  catch (e) { toast(e.message); return; }
+  await refreshPlaylists(); if (route.name === 'playlists') renderRoute(true);
+  toast(pl.pinned ? 'Unpinned' : 'Pinned to the top');
+}
 function playlistMenu(pid, x, y) {
   const pl = S.playlists.find(p => p.id === pid); if (!pl) return;
   openMenu(x, y, [
@@ -1562,6 +1573,7 @@ function playlistMenu(pid, x, y) {
     { label: 'Play next', icon: ICON.play, run: () => queueNext(sourceIds('playlist:' + pid)) },
     { label: 'Add to queue', icon: ICON.queue, run: () => queueEnd(sourceIds('playlist:' + pid)) },
     { sep: 1 },
+    { label: pl.pinned ? 'Unpin' : 'Pin to top', icon: ICON.pin, run: () => togglePin(pid) },
     { label: 'Change cover…', icon: ICON.image, run: () => pickPlaylistCover(pid) },
     ...(pl.cover ? [{ label: 'Remove cover', icon: ICON.trash, run: () => removePlaylistCover(pid) }] : []),
     { label: 'Rename', icon: ICON.edit, run: () => renamePlaylist(pid) },
