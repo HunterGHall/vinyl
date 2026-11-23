@@ -1336,7 +1336,10 @@ function parseHash() {
   const arg = decodeURIComponent(rest.join('/'));
   return ROUTES.includes(name) ? { name, arg } : { name: 'home', arg: '' };
 }
-function go(h) { if (location.hash === h) renderRoute(true); else location.hash = h; }
+function go(h) {
+  if (S.np) { S.np = false; applyNPState(); } // leaving Now Playing, even for the page that is already underneath
+  if (location.hash === h) renderRoute(true); else location.hash = h;
+}
 window.addEventListener('hashchange', () => renderRoute(false));
 
 function renderRoute(keepScroll) {
@@ -1384,7 +1387,12 @@ $('#q').addEventListener('focus', () => { if (route.name !== 'search') location.
 
 document.addEventListener('click', async e => {
   const t = e.target;
-  if (t.closest('a[href^="#/"]')) return; // plain links just navigate
+  if (t.closest('a[href^="#/"]')) { // plain links just navigate...
+    // ...but if the page under Now Playing is already that page (Songs while on Songs), the hash
+    // doesn't change and nothing would close the stage, so close it here.
+    if (S.np) { S.np = false; applyNPState(); }
+    return;
+  }
   const nav = t.closest('[data-nav]'); if (nav && nav.tagName === 'BUTTON') { go(nav.dataset.nav); return; }
   const actEl = t.closest('[data-act]');
   if (actEl) {
