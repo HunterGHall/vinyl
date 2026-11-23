@@ -355,16 +355,25 @@ pub fn search_youtube(query: &str) -> Result<Vec<Value>, String> {
 /// on YouTube when the song is downloaded.
 pub fn search_catalog(query: &str) -> Result<Vec<Value>, String> {
     let url = format!(
-        "https://itunes.apple.com/search?media=music&entity=song&limit=14&term={}",
+        "https://itunes.apple.com/search?media=music&entity=song&limit=50&term={}",
         util::quote_all(query)
     );
     let text = util::http_get_text(&url, 15, 2)
         .map_err(|_| "Couldn't reach the music catalog. Check your connection and try again.".to_string())?;
     let v: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     let mut results = Vec::new();
+    // the same song often comes back once per album, single and compilation: keep the first
+    let mut seen = std::collections::HashSet::new();
     for r in v["results"].as_array().into_iter().flatten() {
         let (Some(id), Some(title)) = (r["trackId"].as_i64(), r["trackName"].as_str()) else { continue };
         let artist = r["artistName"].as_str().unwrap_or("");
+        let same: String = format!("{artist}\u{1}{title}").to_lowercase().chars().filter(|c| c.is_alphanumeric() || *c == '\u{1}').collect();
+        if !seen.insert(same) {
+            continue;
+        }
+        if results.len() >= 30 {
+            break;
+        }
         let duration = r["trackTimeMillis"].as_f64().unwrap_or(0.0) / 1000.0;
         let art = r["artworkUrl100"].as_str().unwrap_or("");
         let key = format!("apple:{id}");

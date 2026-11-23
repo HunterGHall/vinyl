@@ -1036,14 +1036,48 @@ function renderSearch() {
   clearTimeout(renderSearch.t);
   renderSearch.t = setTimeout(() => webSearch(q), 450);
 }
-async function webSearch(q) {
-  const box = $('#web-search'); if (!box || S.q.trim() !== q) return;
-  box.innerHTML = `<div class="sect-title">From the catalog</div><div class="note">Searching…</div>`;
+/* "From the catalog" (Apple's catalog) plus a YouTube search for things the catalog doesn't have (remixes, edits, new uploads). */
+const WEB_SHOWN = 8;
+let web = { q: '', cat: null, catErr: '', yt: null, ytErr: '', more: false };
+const webRow = (i, act) => `<div class="wrow"><div class="art" style="background-image:url('${esc(i.thumbnail)}')"></div><div style="min-width:0"><div class="tt">${esc(i.title)}</div><div class="ta">${esc(i.artist)}${i.album ? ' · ' + esc(i.album) : ''}${act === 'add-yt' && i.duration ? ' · ' + fmt(i.duration) : ''}</div></div><button class="add-btn ${i.in_library ? 'done' : ''}" data-act="${act}" data-key="${esc(i.id)}" ${i.in_library ? 'disabled' : ''}>${i.in_library ? 'In library' : 'Add'}</button></div>`;
+function drawWeb() {
+  const box = $('#web-search'); if (!box || S.q.trim() !== web.q) return;
+  const cat = web.cat, yt = web.yt;
+  let html = `<div class="sect-title">From the catalog</div>`;
+  if (cat === null && !web.catErr) html += `<div class="note">Searching…</div>`;
+  else if (web.catErr) html += `<div class="note">${esc(web.catErr)} <button class="chip" data-act="web-retry">Retry</button></div>`;
+  else {
+    const list = web.more ? cat : cat.slice(0, WEB_SHOWN);
+    html += `<div class="web">${list.map(i => webRow(i, 'add-catalog')).join('') || '<div class="note">No catalog results.</div>'}</div>`;
+    if (!web.more && cat.length > WEB_SHOWN) html += `<div class="web-more"><button class="chip" data-act="web-more">Show ${cat.length - WEB_SHOWN} more</button></div>`;
+  }
+  if (yt === 'loading') html += `<div class="sect-title">From YouTube</div><div class="note">Searching YouTube…</div>`;
+  else if (Array.isArray(yt)) html += `<div class="sect-title">From YouTube</div><div class="web">${yt.map(i => webRow(i, 'add-yt')).join('') || '<div class="note">No YouTube results.</div>'}</div>`;
+  else if (web.ytErr) html += `<div class="sect-title">From YouTube</div><div class="note">${esc(web.ytErr)} <button class="chip" data-act="web-yt">Retry</button></div>`;
+  else if (cat !== null || web.catErr) html += `<div class="web-more">${cat && cat.length < 3 ? '<div class="note" style="margin-bottom:8px">Not many catalog results. Remixes, edits and new uploads are usually on YouTube.</div>' : ''}<button class="chip" data-act="web-yt">Search YouTube</button></div>`;
+  box.innerHTML = html;
+}
+async function webYouTube() {
+  const q = web.q; if (web.yt === 'loading') return;
+  web.yt = 'loading'; web.ytErr = ''; drawWeb();
   let results;
-  try { results = (await api(`/api/search?q=${enc(q)}`)).results; } catch (e) { if (S.q.trim() === q && $('#web-search')) $('#web-search').innerHTML = `<div class="sect-title">From the catalog</div><div class="note">${esc(e.message)}</div>`; return; }
-  if (S.q.trim() !== q || !$('#web-search')) return;
+  try { results = (await api(`/api/search?source=youtube&q=${enc(q)}`)).results; }
+  catch (e) { if (web.q === q) { web.yt = null; web.ytErr = e.message; drawWeb(); } return; }
+  if (web.q !== q) return;
+  results.forEach(i => { S.webItems[i.id] = i; });
+  web.yt = results; drawWeb();
+}
+async function webSearch(q) {
+  if (!$('#web-search') || S.q.trim() !== q) return;
+  web = { q, cat: null, catErr: '', yt: null, ytErr: '', more: false };
+  drawWeb();
+  let results;
+  try { results = (await api(`/api/search?q=${enc(q)}`)).results; }
+  catch (e) { if (web.q === q) { web.catErr = e.message; drawWeb(); } return; }
+  if (web.q !== q) return;
   S.webItems = { ...S.webItems, ...Object.fromEntries(results.map(i => [i.id, i])) };
-  $('#web-search').innerHTML = `<div class="sect-title">From the catalog</div><div class="web">${results.map(i => `<div class="wrow"><div class="art" style="background-image:url('${esc(i.thumbnail)}')"></div><div style="min-width:0"><div class="tt">${esc(i.title)}</div><div class="ta">${esc(i.artist)}${i.album ? ' · ' + esc(i.album) : ''}</div></div><button class="add-btn ${i.in_library ? 'done' : ''}" data-act="add-catalog" data-key="${esc(i.id)}" ${i.in_library ? 'disabled' : ''}>${i.in_library ? 'In library' : 'Add'}</button></div>`).join('') || '<div class="note">No catalog results.</div>'}</div>`;
+  web.cat = results; drawWeb();
+  if (results.length < 3 && !web.catErr) webYouTube();
 }
 
 function renderAdd() {
@@ -1767,6 +1801,15 @@ document.addEventListener('click', async e => {
       case 'scroll-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); g.scrollBy({ left: +d.dir * Math.max(240, g.clientWidth * 0.85), behavior: 'smooth' }); return; }
       case 'toggle-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); const open = g.classList.toggle('open'); actEl.textContent = open ? 'Show less' : 'Show all'; actEl.setAttribute('aria-expanded', open); return; }
       case 'add-to-pl': await addToPlaylist(d.pid, [d.id]); actEl.textContent = 'Added'; actEl.disabled = true; actEl.classList.add('done'); return;
+      case 'web-more': web.more = true; drawWeb(); return;
+      case 'web-yt': webYouTube(); return;
+      case 'web-retry': webSearch(S.q.trim()); return;
+      case 'add-yt': {
+        const item = S.webItems?.[d.key]; if (!item) return;
+        actEl.disabled = true; actEl.textContent = 'Adding…';
+        startJob(item.title, { url: item.url, mode: 'track', as_playlist: true }).then(j => { if (j.status === 'done') { actEl.textContent = 'In library'; actEl.classList.add('done'); } else { actEl.textContent = 'Add'; actEl.disabled = false; } });
+        return;
+      }
       case 'add-catalog': {
         const item = S.webItems?.[d.key]; if (!item) return;
         actEl.disabled = true; if (actEl.classList.contains('add-btn')) actEl.textContent = 'Adding…'; else actEl.innerHTML = ICON.check;

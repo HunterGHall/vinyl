@@ -321,6 +321,8 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 .modal h3{font:700 22px var(--display);letter-spacing:-.02em;margin-bottom:6px}
 .modal p{color:var(--dim);margin-bottom:14px;white-space:pre-line}
 .modal .field{max-width:none;margin:8px 0 18px}
+.web-more{margin:10px 0 4px}
+.web-more .note{max-width:560px}
 .pick-list{max-height:320px;overflow:auto;margin:0 -6px;padding:0 6px}
 .pick{display:flex;align-items:center;gap:12px;padding:8px 6px;border-radius:8px;cursor:pointer}
 .pick:hover{background:var(--hover)}
