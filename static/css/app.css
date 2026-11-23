@@ -262,11 +262,6 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 .lyr p.cur{color:#fff;transform:scale(1.02)}
 .lyr.plain{mask-image:none;padding:12px 0}
 .lyr.plain p{font:500 16px/1.55 var(--font);color:rgba(255,255,255,.85);cursor:default;padding:1px 0}
-.mini{display:flex;align-items:center;gap:10px;padding:6px 0;width:100%;text-align:left}
-.mini .art{width:40px;height:40px;border-radius:6px}
-.mini .tt{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mini .ta{font-size:13px;color:var(--dim)}
-.mini .txt{min-width:0;flex:1}
 
 /* ---- dock (player) ---- */
 .dock{position:fixed;left:calc(var(--sidew) + 18px);right:18px;bottom:16px;height:var(--dockh);z-index:30;display:grid;grid-template-columns:minmax(200px,1fr) minmax(300px,560px) minmax(200px,1fr);align-items:center;gap:18px;padding:0 18px 0 14px;background:rgba(34,34,38,.78);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border:1px solid rgba(255,255,255,.09);border-radius:22px;box-shadow:0 18px 50px rgba(0,0,0,.5)}

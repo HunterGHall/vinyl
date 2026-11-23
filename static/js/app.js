@@ -514,7 +514,6 @@ function syncHearts() {
 }
 function markNow() {
   $$('.row').forEach(r => r.classList.toggle('now', r.dataset.id === P.cur?.id));
-  $$('.mini').forEach(r => r.classList.toggle('now', r.dataset.id === P.cur?.id));
   $$('.lib-item').forEach(r => r.classList.toggle('now', !!r.dataset.playing && r.dataset.playing === P.cur?.id));
 }
 
@@ -522,8 +521,6 @@ function markNow() {
 
 const lyricCache = new Map();
 let lyricLines = [], lyricIdx = -1, lyricFor = null;
-
-function nextUpIds() { return [...P.userQ, ...P.order.slice(P.pos + 1)].slice(0, 4); }
 
 function renderNP() {
   const el = $('#np'); if (!S.np) return;
@@ -536,7 +533,6 @@ function renderNP() {
     ${t.isPv || !S.lyrics ? '' : `<div class="np-sec grow"><h4>Lyrics <button data-act="refresh-lyrics">Reload</button></h4><div id="lyr" class="lyr plain"><p class="note">Loading lyrics…</p></div></div>`}`;
   if (!t.isPv && S.lyrics) loadLyrics(t);
 }
-const miniRow = t => t ? `<button class="mini" data-id="${esc(t.id)}" data-act="play-one">${artHTML(t)}<div class="txt"><div class="tt">${esc(t.title)}</div><div class="ta">${esc(t.artist)}</div></div></button>` : '';
 
 async function loadLyrics(t, refresh = false) {
   lyricFor = t.id; lyricLines = []; lyricIdx = -1;
@@ -634,7 +630,6 @@ function shelf(title, sub, cards, id, cls = '') {
     : `<button data-act="toggle-shelf" aria-expanded="false">Show all</button>`}</div><div class="grid" ${id ? `id="${id}"` : ''}>${cards.join('')}</div></section>`;
 }
 
-const greeting = () => { const h = new Date().getHours(); return h < 5 ? 'Late night vibes' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
 
 function qtile(inner, playKey, href) {
   return `<div class="qtile" data-href="${esc(href)}" tabindex="0" role="link">${inner}<button class="go" data-act="play-card" data-play="${esc(playKey)}" aria-label="Play">${ICON.play}</button></div>`;
@@ -847,15 +842,6 @@ function renderLiked() {
     ${ids.length ? actionsHTML('liked') + trackRows(ids) : `<div class="empty"><b>Songs you like will appear here</b>Tap the heart on any song to save it.</div>`}`;
   $('#view').style.setProperty('--hue', '#7a3418');
 }
-function likedRecs(ids) {
-  const seeds = new Map();
-  for (const id of ids) { const k = akey(trackOf(id)); seeds.set(k, (seeds.get(k) || 0) + 1); }
-  const top = new Map([...seeds.entries()].map(([k, n]) => [k, Math.min(1, n / 3)]));
-  const rec = spread(scoreTracks(top, { exclude: new Set(ids), novelty: 0.2 }), 8);
-  if (!rec.length) return '';
-  return `<div class="sect-title">Recommended</div><div class="note" style="margin-bottom:8px">Based on the songs in this playlist</div>${trackRows(rec.map(t => t.id), { num: true })}`;
-}
-
 /* ---- app updates (the server asks GitHub for the latest release) ---- */
 async function checkForUpdate({ manual = false } = {}) {
   let info;
@@ -944,10 +930,6 @@ function renderPlaylist(id) {
   $('#view').innerHTML = `${heroHTML({ kind: 'Playlist', title: pl.name, art: cover, meta: `<b>${plural(ids.length, 'song')}</b>${ids.length ? ` · ${fmtLong(totalDur(ids))}` : ''}` })}
     ${ids.length ? actionsHTML('playlist:' + id, { menu }) + trackRows(ids, { removeFrom: id, sort: 'playlist:' + id }) : `<div class="actions">${menu}</div><div class="empty"><b>This playlist is empty</b>Add songs from any song's ••• menu, or pick from the recommendations below.</div>`}`;
   tint(ids);
-}
-function recsForEmpty(pid) {
-  const r = spread(scoreTracks(new Map(taste().top.slice(0, 5).map((k, i) => [k, 1 - i * 0.1])), {}), 6);
-  return r.length ? `<div class="sect-title">Suggested songs</div>${recRows(r.map(t => t.id), pid)}` : '';
 }
 function recRows(ids, pid) {
   return ids.map(id => { const t = trackOf(id); return `<div class="wrow">${artHTML(t)}<div style="min-width:0"><div class="tt">${esc(t.title)}</div><div class="ta">${esc(t.artist)}</div></div><button class="add-btn" data-act="add-to-pl" data-pid="${esc(pid)}" data-id="${esc(id)}">Add</button></div>`; }).join('');
@@ -1701,8 +1683,7 @@ document.addEventListener('click', async e => {
       case 'more': trackMenu(d.id, r.left, r.bottom + 4, d.from); return;
       case 'play-one': {
         const tr = trackOf(d.id); if (!tr) return;
-        if (actEl.closest('.mini')) setContext([tr.id], 0, { label: tr.title });
-        else playFrom(d.id);
+        playFrom(d.id);
         return;
       }
       case 'play-card': playSource(d.play); return;
@@ -1809,7 +1790,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === '/') { e.preventDefault(); $('#q').focus(); }
 });
 document.addEventListener('contextmenu', e => {
-  const row = e.target.closest('.row,.mini'); if (row?.dataset.id) { e.preventDefault(); trackMenu(row.dataset.id, e.clientX, e.clientY, route.name === 'playlist' ? route.arg : null); return; }
+  const row = e.target.closest('.row'); if (row?.dataset.id) { e.preventDefault(); trackMenu(row.dataset.id, e.clientX, e.clientY, route.name === 'playlist' ? route.arg : null); return; }
   const li = e.target.closest('.lib-item[data-pl]'); if (li) { e.preventDefault(); playlistMenu(li.dataset.pl, e.clientX, e.clientY); return; }
   const cd = e.target.closest('.card[data-kind]');
   if (cd && ['album', 'mix', 'artist', 'playlist'].includes(cd.dataset.kind)) {
