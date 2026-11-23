@@ -49,8 +49,10 @@ Source: "vinyl.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\Vinyl"; Filename: "{app}\vinyl.exe"; IconFilename: "{app}\vinyl.ico"
-Name: "{autodesktop}\Vinyl"; Filename: "{app}\vinyl.exe"; IconFilename: "{app}\vinyl.ico"; Tasks: desktopicon
+; AppUserModelID must match APP_ID in src/main.rs: it is what lets Windows group the running window
+; under the pinned taskbar icon instead of showing a second one.
+Name: "{autoprograms}\Vinyl"; Filename: "{app}\vinyl.exe"; IconFilename: "{app}\vinyl.ico"; AppUserModelID: "HunterGHall.Vinyl"
+Name: "{autodesktop}\Vinyl"; Filename: "{app}\vinyl.exe"; IconFilename: "{app}\vinyl.ico"; AppUserModelID: "HunterGHall.Vinyl"; Tasks: desktopicon
 
 [Run]
 Filename: "winget"; Parameters: "install --id yt-dlp.yt-dlp -e --silent --accept-package-agreements --accept-source-agreements"; StatusMsg: "Installing yt-dlp..."; Flags: runhidden waituntilterminated; Tasks: tools

@@ -52,7 +52,7 @@ fn name_process_for_windows() {
     // Name the process for the Windows media overlay instead of "Unknown app":
     // Windows looks the label up by AppUserModelID, so register a DisplayName
     // for ours under HKCU (per-user, no admin needed).
-    const APP_ID: &str = "local.vinyl.player";
+    const APP_ID: &str = "HunterGHall.Vinyl"; // must match AppUserModelID in installer/vinyl.iss
     #[link(name = "shell32")]
     unsafe extern "system" {
         fn SetCurrentProcessExplicitAppUserModelID(id: *const u16) -> i32;
