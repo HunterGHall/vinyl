@@ -45,6 +45,7 @@ img{display:block}
 .nav-link:hover{background:var(--hover)}
 .nav-link.on{background:var(--raise)}
 .nav-btn{width:100%;text-align:left}
+.stage-open .nav-link.on:not(.nav-btn){background:transparent} /* only Now Playing is lit while it is open */
 .playing .nav-btn svg{animation:spin 4s linear infinite}
 .side-head{display:flex;align-items:center;justify-content:space-between;margin:20px 10px 6px;padding-right:2px;font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--dim);text-transform:uppercase}
 .side-head a:hover,.side-head a.on{color:var(--text)}

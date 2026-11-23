@@ -21,11 +21,29 @@ Your own songs on Windows, with Daily Mixes, new music from similar artists, and
 </div>
 
 <p align="center">
+  <a href="#screenshots">Screenshots</a> ·
   <a href="#install">Install</a> ·
   <a href="#features">Features</a> ·
   <a href="#running-from-source">Running from source</a> ·
   <a href="https://github.com/HunterGHall/vinyl/releases">Releases</a>
 </p>
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="Home: Daily Mixes and new music" width="49%">
+  <img src="docs/screenshots/now-playing.png" alt="Now Playing: the spinning ASCII vinyl with synced lyrics" width="49%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/albums.png" alt="Albums" width="49%">
+  <img src="docs/screenshots/discover.png" alt="Discover: artists like the ones you listen to" width="49%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/songs.png" alt="Your songs" width="49%">
+  <img src="docs/screenshots/playlist.png" alt="A playlist" width="49%">
+</p>
+
+<sub>Screenshots use a demo library: other artists' albums with silent placeholder audio.</sub>
 
 ## Install
 
