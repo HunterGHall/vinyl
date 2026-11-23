@@ -1497,6 +1497,20 @@ document.addEventListener('mouseover', e => { // seek bar gets the accent while 
 
 /* -------------------------------------------------------------------- boot */
 
+/* Desktop window: the native title bar is off, so the page draws its own. window.ipc exists only
+   inside the desktop app; in a browser the bar stays hidden. */
+if (window.ipc) {
+  document.body.classList.add('desktop');
+  const send = m => window.ipc.postMessage(m);
+  document.addEventListener('mousedown', e => {
+    if (e.button !== 0 || !e.target.closest('[data-win="drag"]')) return;
+    send(e.detail === 2 ? 'max' : 'drag'); // double-click toggles maximize
+  });
+  $$('.wincontrols [data-win]').forEach(b => { b.onclick = () => send(b.dataset.win); });
+  const syncMaxed = () => document.body.classList.toggle('maxed', outerWidth >= screen.availWidth - 2 && outerHeight >= screen.availHeight - 2);
+  addEventListener('resize', syncMaxed); syncMaxed();
+}
+
 /* Keyboard media keys, also while Vinyl is in the background. The desktop app grabs them
    system-wide and the server hands the presses over; in a browser this does nothing. */
 async function mediaKeyLoop() {

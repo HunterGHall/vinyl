@@ -86,7 +86,7 @@ fn load_icon() -> Option<tao::window::Icon> {
 fn run_desktop() -> Result<(), String> {
     use tao::dpi::{LogicalSize, Size};
     use tao::event::{Event, WindowEvent};
-    use tao::event_loop::{ControlFlow, EventLoop};
+    use tao::event_loop::{ControlFlow, EventLoopBuilder};
     use tao::window::WindowBuilder;
     use wry::{WebContext, WebViewBuilder};
 
@@ -101,20 +101,45 @@ fn run_desktop() -> Result<(), String> {
     });
     wait_for_server();
 
-    let event_loop = EventLoop::new();
+    // The page draws its own title bar (drag area + minimize/maximize/close) and tells us what
+    // the user did through the webview's IPC channel.
+    #[derive(Clone, Copy)]
+    enum Cmd {
+        Drag,
+        Minimize,
+        ToggleMaximize,
+        Close,
+    }
+    let event_loop = EventLoopBuilder::<Cmd>::with_user_event().build();
+    let proxy = event_loop.create_proxy();
     let icon = load_icon();
-    let window = WindowBuilder::new()
+    let builder = WindowBuilder::new()
         .with_title("Vinyl")
         .with_window_icon(icon)
+        .with_decorations(false)
         .with_inner_size(LogicalSize::new(1280.0, 820.0))
-        .with_min_inner_size(Size::Logical(LogicalSize::new(960.0, 620.0)))
-        .build(&event_loop)
-        .map_err(|e| e.to_string())?;
+        .with_min_inner_size(Size::Logical(LogicalSize::new(960.0, 620.0)));
+    #[cfg(windows)]
+    let builder = {
+        use tao::platform::windows::WindowBuilderExtWindows;
+        builder.with_undecorated_shadow(true) // keeps the drop shadow and rounded corners
+    };
+    let window = builder.build(&event_loop).map_err(|e| e.to_string())?;
 
     // A persistent (non-incognito) WebView2 profile makes Windows show track
     // metadata in the media overlay.
     let mut context = WebContext::new(Some(store::paths().data.join("webview")));
     let builder = WebViewBuilder::new_with_web_context(&mut context)
+        .with_ipc_handler(move |req| {
+            let cmd = match req.body().as_str() {
+                "drag" => Cmd::Drag,
+                "min" => Cmd::Minimize,
+                "max" => Cmd::ToggleMaximize,
+                "close" => Cmd::Close,
+                _ => return,
+            };
+            let _ = proxy.send_event(cmd);
+        })
         .with_url(format!("http://127.0.0.1:{}", port()))
         .with_background_color((11, 11, 13, 255));
 
@@ -130,8 +155,16 @@ fn run_desktop() -> Result<(), String> {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         let _keep_alive = (&_webview, &window);
-        if let Event::WindowEvent { event: WindowEvent::CloseRequested, .. } = event {
-            *control_flow = ControlFlow::Exit;
+        match event {
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } | Event::UserEvent(Cmd::Close) => {
+                *control_flow = ControlFlow::Exit;
+            }
+            Event::UserEvent(Cmd::Drag) => {
+                let _ = window.drag_window();
+            }
+            Event::UserEvent(Cmd::Minimize) => window.set_minimized(true),
+            Event::UserEvent(Cmd::ToggleMaximize) => window.set_maximized(!window.is_maximized()),
+            _ => {}
         }
     });
 }

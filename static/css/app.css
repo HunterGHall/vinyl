@@ -354,3 +354,17 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 /* ===== Gray theme (accent colors). Swap these variables to change the look. ===== */
 :root{--accent:#d2d2d7;--accent2:#ffffff;--on-accent:#1c1c1e;--grad:linear-gradient(135deg,#f2f2f7,#aeaeb2);--hue:#2c2c2f;--tint:#2c2c2f}
 .view{--hue:#2c2c2f!important}
+
+/* ---- custom title bar (desktop window only: the native one is turned off) ---- */
+.winbar{display:none}
+body.desktop .winbar{display:flex;position:fixed;top:0;left:0;right:0;height:32px;z-index:100;background:linear-gradient(90deg,var(--side) var(--sidew),var(--bg) var(--sidew));user-select:none}
+body.desktop .shell{margin-top:32px;height:calc(100vh - 32px)}
+body.desktop .stage{top:32px}
+.winbar .drag{flex:1}
+.wincontrols{display:flex}
+.wincontrols button{width:46px;height:32px;display:grid;place-items:center;color:var(--dim)}
+.wincontrols svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1}
+.wincontrols button:hover{background:rgba(255,255,255,.1);color:var(--text)}
+.wincontrols .close:hover{background:#e81123;color:#fff}
+.wincontrols .i-rest,body.maxed .wincontrols .i-max{display:none}
+body.maxed .wincontrols .i-rest{display:block}
