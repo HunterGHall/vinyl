@@ -1617,13 +1617,26 @@ function trackMenu(id, x, y, fromPl) {
     { label: 'Add to queue', icon: ICON.queue, run: () => queueEnd([id]) },
     { label: 'Go to artist', icon: ICON.user, run: () => go(`#/artist/${enc(primaryArtist(t.artist))}`) },
   ];
+  if (S.settings?.lyrics_enabled !== false) items.push({ label: 'Refresh lyrics', icon: ICON.list, run: () => refreshLyrics(t) });
   if (fromPl) items.push({ sep: 1 }, { label: 'Remove from this playlist', icon: ICON.trash, run: () => removeFromPlaylist(fromPl, id) });
   items.push({ sep: 1 }, { label: 'Delete from library…', icon: ICON.trash, danger: true, run: () => deleteTrack(t) });
   openMenu(x, y, items);
 }
+/* Looks a song's lyrics up again, replacing the saved copy (for wrong or missing lyrics). */
+async function refreshLyrics(t) {
+  let res;
+  try { res = await api(`/api/tracks/${enc(t.id)}/lyrics?refresh=1`); }
+  catch (e) { toast(e.message); return; }
+  lyricCache.set(t.id, res);
+  if (P.cur?.id === t.id) loadLyrics(t); // showing this song: redraw from the new copy
+  toast({ found: 'Lyrics updated', none: 'No lyrics found for this song', instrumental: 'Marked as instrumental', disabled: 'Lyrics are turned off in Settings', error: "Couldn't reach the lyrics service" }[res.status] || 'Lyrics updated');
+}
 function playlistPicker(ids, x, y) {
   const items = [{ head: 'Add to playlist' }, { label: 'New playlist', icon: ICON.plus, run: async () => { const pl = await newPlaylist(); if (pl) await addToPlaylist(pl.id, ids); } }];
-  for (const pl of S.playlists) items.push({ label: pl.name, run: () => addToPlaylist(pl.id, ids) });
+  for (const pl of S.playlists) {
+    const all = ids.every(id => (pl.track_ids || []).includes(id));
+    items.push({ label: pl.name + (all ? ' (added)' : ''), icon: all ? ICON.check : '', run: () => addToPlaylist(pl.id, ids) });
+  }
   openMenu(x, y, items);
 }
 function pickPlaylistCover(pid) {
@@ -1781,10 +1794,14 @@ async function deletePlaylist(pid) {
   await refreshPlaylists(); if (route.name === 'playlist') go('#/home'); toast('Playlist deleted');
 }
 async function addToPlaylist(pid, ids) {
-  try { await api(`/api/playlists/${pid}/tracks`, { method: 'POST', body: { track_ids: ids } }); }
+  // A playlist holds each song once: say which ones were already there instead of a misleading "Added".
+  const pl = S.playlists.find(p => p.id === pid), name = pl?.name || 'the playlist';
+  const have = new Set(pl?.track_ids || []), fresh = ids.filter(id => !have.has(id)), dupes = ids.length - fresh.length;
+  if (!fresh.length) { toast(ids.length === 1 ? `Already in ${name}` : `All ${ids.length} songs are already in ${name}`); return; }
+  try { await api(`/api/playlists/${pid}/tracks`, { method: 'POST', body: { track_ids: fresh } }); }
   catch (e) { toast(e.message); return; }
-  const pl = S.playlists.find(p => p.id === pid);
-  await refreshPlaylists(); toast(`Added to ${pl?.name || 'playlist'}`);
+  await refreshPlaylists();
+  toast(dupes ? `Added ${plural(fresh.length, 'song')} to ${name} · ${dupes} already there` : `Added to ${name}`);
   if (route.name === 'playlist' && route.arg === pid) renderRoute(true);
 }
 async function removeFromPlaylist(pid, id) {

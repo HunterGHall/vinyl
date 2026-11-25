@@ -14,7 +14,7 @@ const AsciiVinyl = (() => {
   const octx = out.getContext('2d');
   const DEFAULTS = { spin: true, speed: 1.1, dir: '1', sheen: 'fixed', light: 163, glow: 1, cover: 300, rad: 120, cell: 5, ramp: 'classic', color: 'orig' };
   let cfg = { ...DEFAULTS };
-  const save = () => { try { localStorage.setItem('vinyl.ascii', JSON.stringify(cfg)); } catch { /* private mode */ } };
+  const save = () => { dirty = true; try { localStorage.setItem('vinyl.ascii', JSON.stringify(cfg)); } catch { /* private mode */ } };
 
   const RAMPS = { classic: ' .:-=+*#%@', dense: ' .,:;i1tfLCG08@', blocks: ' ░▒▓█', binary: ' 01' };
   const MONO = { white: [235, 235, 235], green: [70, 255, 120], amber: [255, 170, 40] };
@@ -33,17 +33,21 @@ const AsciiVinyl = (() => {
 
   let cover = null; // HTMLImageElement of the current artwork (null -> the built-in label art)
   let coverUrl, coverPending = false, pendingSince = 0, drawn = false;
+  // While the song is paused (or the disc isn't set to turn) the record holds still, so a frame is only
+  // drawn when something on it changes: a new cover, a settings tweak, or reopening Now Playing.
+  let dirty = true;
   // The record is not drawn while the right cover is still loading, and the previous cover stays on it
   // until the new one is ready: the built-in label art only ever shows for songs that have no cover.
   function setCover(url) {
     url = url || null;
     if (url === coverUrl) return;
     coverUrl = url;
+    dirty = true;
     if (!url) { cover = null; coverPending = false; return; }
     coverPending = true; pendingSince = performance.now();
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    const done = ok => { if (coverUrl !== url) return; cover = ok && probe(img) ? img : null; coverPending = false; };
+    const done = ok => { if (coverUrl !== url) return; cover = ok && probe(img) ? img : null; coverPending = false; dirty = true; };
     img.onload = () => done(true);
     img.onerror = () => done(false);
     img.src = url;
@@ -124,6 +128,7 @@ const AsciiVinyl = (() => {
     const grid = document.createElement('canvas'); grid.width = cols; grid.height = rows;
     gctx = grid.getContext('2d', { willReadFrequently: true });
     gctx.imageSmoothingEnabled = true; gctx.imageSmoothingQuality = 'high';
+    dirty = true;
   }
   layout();
 
@@ -132,10 +137,14 @@ const AsciiVinyl = (() => {
     if (!running) return;
     requestAnimationFrame(frame);
     if (now - lastDraw < 30) return; // ~30 fps is plenty for ASCII and keeps the CPU calm
+    if (document.hidden) { tPrev = now; return; } // minimised or behind another window: nothing to show
     if (coverPending && now - pendingSince < 1500) return; // wait for the cover instead of showing the wrong art
+    const turning = cfg.spin && isPlaying();
+    if (!turning && !dirty) { tPrev = now; return; } // standing still and unchanged: skip the work
+    dirty = false;
     lastDraw = now;
     const dt = Math.min(0.1, (now - tPrev) / 1000); tPrev = now;
-    if (cfg.spin && isPlaying()) ang += dt * cfg.speed * +cfg.dir;
+    if (turning) ang += dt * cfg.speed * +cfg.dir;
     drawSource(ang);
     gctx.drawImage(src, 0, 0, cols, rows);
     const d = gctx.getImageData(0, 0, cols, rows).data;
@@ -161,7 +170,7 @@ const AsciiVinyl = (() => {
     if (!drawn) { drawn = true; out.classList.add('ready'); } // fade the record in once it has its cover
   }
 
-  function start(playingFn) { isPlaying = playingFn; if (running) return; running = true; tPrev = performance.now(); requestAnimationFrame(frame); }
+  function start(playingFn) { isPlaying = playingFn; if (running) return; running = true; dirty = true; tPrev = performance.now(); requestAnimationFrame(frame); }
   function stop() { running = false; }
 
   // ---- settings panel (same controls as ascii-vinyl) ----
