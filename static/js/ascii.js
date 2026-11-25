@@ -1,9 +1,13 @@
+// ts was made by claude
+
 'use strict';
 /* The now-playing record: a turntable disc rendered as live ASCII (ported from ascii-vinyl).
    The cover sits on the label; the disc turns while music plays.
    Defaults are the settings picked in ascii-vinyl: rotate, 1.10 rad/s, clockwise, fixed light
    at 163 degrees, intensity 1.00, cover 300 px / radius 120 px, 5 px cells, classic characters,
    original colours. */
+
+
 const AsciiVinyl = (() => {
   const S = 1080, CX = 540, CY = 540, R_DISC = 440, F = 720, K = F / S;
   const out = document.getElementById('ascii');

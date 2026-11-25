@@ -1,23 +1,5 @@
 #![cfg_attr(all(windows, feature = "desktop", not(debug_assertions)), windows_subsystem = "windows")]
-//! Vinyl: a local music player, ported from the Flask + pywebview app.
-//!
-//! Download tracks or whole playlists from YouTube/Spotify links, organise them
-//! into playlists and play them back - all stored locally. Needs `yt-dlp`,
-//! `ffmpeg` and `ffprobe` on PATH.
-//!
-//!   vinyl          open the desktop window
-//!   vinyl --web    just serve http://127.0.0.1:8735 for a browser
-//!
-//! The library and data live in `$MUSIC_HOME` (default: the current directory, or
-//! `%LOCALAPPDATA%\Vinyl` for an installed copy).
-//!
-//! Source layout:
-//!
-//!   base/      where data lives and how it is saved (`store`), shared helpers (`util`)
-//!   library/   songs, playlists, likes, history (`mod`), adding files (`import`), clean-up tools (`tools`)
-//!   music/     online sources: downloads, lyrics, Spotify links, discovery
-//!   server/    the local web server and its API (`routes`)
-//!   system/    this computer: yt-dlp/ffmpeg (`deps`), media keys, self-update
+
 
 mod base;
 mod library;
