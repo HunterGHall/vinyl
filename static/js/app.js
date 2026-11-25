@@ -1084,6 +1084,26 @@ function renderLibrary_() {
   $('#view').style.setProperty('--hue', '#3a2a22');
 }
 
+/* Search text: case, accents and punctuation don't matter ("beyonce" finds "Beyoncé", "black panther"
+   finds "_Black Panther_", "dont" finds "Don't"). Stylised letters match too: "fein" finds "FE!N", "mister" finds "MI$TER". */
+const FOLD = { 'ø': 'o', 'æ': 'ae', 'œ': 'oe', 'ß': 'ss', 'ł': 'l', 'đ': 'd', 'ð': 'd', 'þ': 'th', 'ı': 'i' };
+const foldText = (x, leet) => {
+  let t = String(x || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[øæœßłđðþı]/g, c => FOLD[c]);
+  if (leet) t = t.replace(/!/g, 'i').replace(/\$/g, 's').replace(/@/g, 'a');
+  return t.replace(/&/g, ' and ').replace(/['’‘`.]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+};
+const searchText = x => { const a = foldText(x), b = foldText(x, true); return a === b ? a : a + ' | ' + b; };
+const searchWords = q => foldText(q).split(' ').filter(Boolean);
+const matchesAll = (text, words) => words.every(w => text.includes(w));
+let searchIdx = { ver: -1, map: new Map() };
+function trackSearchText(t) { // built once per library version, not on every keystroke
+  if (searchIdx.ver !== S.ver) searchIdx = { ver: S.ver, map: new Map() };
+  let h = searchIdx.map.get(t.id);
+  if (h === undefined) { h = searchText(`${t.title} ${t.artist} ${t.album || ''}`); searchIdx.map.set(t.id, h); }
+  return h;
+}
+const SEARCH_SHOWN = 30;
+
 function renderSearch() {
   const q = S.q.trim(), view = $('#view');
   if (!q) {
@@ -1093,13 +1113,14 @@ function renderSearch() {
     view.style.setProperty('--hue', '#2d2a3a');
     return;
   }
-  const lq = q.toLowerCase(), words = lq.split(/\s+/);
-  const hit = t => { const h = `${t.title} ${t.artist} ${t.album || ''}`.toLowerCase(); return words.every(w => h.includes(w)); };
+  const nq = foldText(q), words = searchWords(q);
+  if (S.searchAllFor !== q) S.searchAll = false; // "Show all" is per query
+  const hit = t => matchesAll(trackSearchText(t), words);
   const songs = S.tracks.filter(hit).sort((a, b) => (b.plays || 0) - (a.plays || 0));
-  const T = taste(), artists = [...T.byArtist.keys()].filter(k => words.every(w => (T.names.get(k) || '').toLowerCase().includes(w)));
-  const pls = S.playlists.filter(p => words.every(w => p.name.toLowerCase().includes(w)));
+  const T = taste(), artists = [...T.byArtist.keys()].filter(k => matchesAll(searchText(T.names.get(k)), words));
+  const pls = S.playlists.filter(p => matchesAll(searchText(p.name), words));
   let top = '';
-  if (artists.length && (T.names.get(artists[0]).toLowerCase().startsWith(lq) || !songs.length)) {
+  if (artists.length && (foldText(T.names.get(artists[0])).startsWith(nq) || !songs.length)) {
     const k = artists[0], t0 = T.byArtist.get(k)[0];
     top = `<div class="tr-card" data-href="#/artist/${enc(T.names.get(k))}" tabindex="0" role="link">${artHTML(t0, 'round')}<div class="t">${esc(T.names.get(k))}</div><div class="s">Artist</div><button class="go" data-act="play-card" data-play="artist:${esc(k)}" aria-label="Play">${ICON.play}</button></div>`;
   } else if (songs.length) {
@@ -1108,14 +1129,16 @@ function renderSearch() {
   }
   view.innerHTML = `${songs.length || artists.length || pls.length ? `<div class="top-result"><div><div class="sect-title" style="margin-top:6px">Top result</div>${top}</div>
       <div><div class="sect-title" style="margin-top:6px">Songs</div>${songs.length ? trackRows(songs.slice(0, 5).map(t => t.id), { album: false }).replace('<div class="tl-head">', '<div class="tl-head" hidden>') : '<div class="note">No matching songs in your library.</div>'}</div></div>` : `<div class="empty"><b>Nothing in your library for "${esc(q)}"</b>Try the catalog results below.</div>`}
-    ${songs.length > 5 ? `<div class="sect-title">More songs</div>` + trackRows(songs.slice(5, 30).map(t => t.id)) : ''}
+    ${songs.length > 5 ? `<div class="sect-title">More songs</div>` + trackRows(songs.slice(5, S.searchAll ? songs.length : SEARCH_SHOWN).map(t => t.id)) : ''}
+    ${!S.searchAll && songs.length > SEARCH_SHOWN ? `<div class="web-more"><button class="chip" data-act="search-all">Show all ${plural(songs.length, 'song')}</button></div>` : ''}
     ${artists.length ? shelf('Artists', '', artists.slice(0, 12).map(artistCard)) : ''}
-    ${(() => { const als = albums().filter(a => words.every(w => `${a.name} ${a.artist}`.toLowerCase().includes(w))); return als.length ? shelf('Albums', '', als.slice(0, 12).map(albumCard)) : ''; })()}
+    ${(() => { const als = albums().filter(a => matchesAll(searchText(`${a.name} ${a.artist}`), words)); return als.length ? shelf('Albums', '', als.slice(0, 12).map(albumCard)) : ''; })()}
     ${pls.length ? shelf('Playlists', '', pls.map(playlistCard)) : ''}
     <div id="web-search"></div>`;
   view.style.setProperty('--hue', '#2d2a3a');
   clearTimeout(renderSearch.t);
-  renderSearch.t = setTimeout(() => webSearch(q), 450);
+  if (web.q === q && (web.cat !== null || web.catErr)) drawWeb(); // same query redrawn ("Show all"): keep the catalog results
+  else renderSearch.t = setTimeout(() => webSearch(q), 450);
 }
 /* "From the catalog" (Apple's catalog) plus a YouTube search for things the catalog doesn't have (remixes, edits, new uploads). */
 const WEB_SHOWN = 8;
@@ -1890,6 +1913,7 @@ document.addEventListener('click', async e => {
       case 'scroll-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); g.scrollBy({ left: +d.dir * Math.max(240, g.clientWidth * 0.85), behavior: 'smooth' }); return; }
       case 'toggle-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); const open = g.classList.toggle('open'); actEl.textContent = open ? 'Show less' : 'Show all'; actEl.setAttribute('aria-expanded', open); return; }
       case 'add-to-pl': await addToPlaylist(d.pid, [d.id]); actEl.textContent = 'Added'; actEl.disabled = true; actEl.classList.add('done'); return;
+      case 'search-all': S.searchAll = true; S.searchAllFor = S.q.trim(); renderSearch(); return;
       case 'web-more': web.more = true; drawWeb(); return;
       case 'web-yt': webYouTube(); return;
       case 'web-retry': webSearch(S.q.trim()); return;
