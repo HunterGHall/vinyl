@@ -861,6 +861,65 @@ function renderLiked() {
   $('#view').style.setProperty('--hue', '#7a3418');
 }
 /* ---- app updates (the server asks GitHub for the latest release) ---- */
+/* ---- release notes: a small, safe markdown renderer (everything is escaped first, then formatted) ---- */
+function mdInline(t) {
+  return t
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<span class="md-link" title="$2">$1</span>') // shown, not followed: a click would load the page inside the app
+    .replace(/https?:\/\/github\.com\/[^\s/]+\/[^\s/]+\/(?:pull|issues)\/(\d+)/g, '#$1') // "in https://github.com/o/r/pull/12" -> "in #12"
+    .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, '<b>$2</b>')
+    .replace(/(^|[^\w*])\*(?=\S)(.+?)(?<=\S)\*(?!\w)/g, '$1<i>$2</i>')
+    .replace(/(^|\W)_(?=\S)(.+?)(?<=\S)_(?!\w)/g, '$1<i>$2</i>')
+    .replace(/~~(.+?)~~/g, '<s>$1</s>');
+}
+function mdToHtml(src) {
+  const out = []; let list = null, para = [], code = null;
+  const endPara = () => { if (para.length) { out.push(`<p>${mdInline(para.join(' '))}</p>`); para = []; } };
+  const endList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (const raw of String(src || '').replace(/\r/g, '').split('\n')) {
+    if (code !== null) { if (/^\s*```/.test(raw)) { out.push(`<pre>${esc(code.join('\n'))}</pre>`); code = null; } else code.push(raw); continue; }
+    if (/^\s*```/.test(raw)) { endPara(); endList(); code = []; continue; }
+    const line = esc(raw), trimmed = line.trim();
+    let m;
+    if (!trimmed) { endPara(); endList(); continue; }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) { endPara(); endList(); out.push('<hr>'); continue; }
+    if ((m = trimmed.match(/^(#{1,6})\s+(.*?)\s*#*$/))) { endPara(); endList(); out.push(`<h5 class="md-h${Math.min(m[1].length, 3)}">${mdInline(m[2])}</h5>`); continue; }
+    if ((m = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/))) {
+      endPara();
+      const kind = /\d/.test(m[2]) ? 'ol' : 'ul';
+      if (list !== kind) { endList(); out.push(`<${kind}>`); list = kind; }
+      out.push(`<li${m[1].length >= 2 ? ' class="sub"' : ''}>${mdInline(m[3])}</li>`);
+      continue;
+    }
+    if ((m = trimmed.match(/^&gt;\s?(.*)$/))) { endPara(); endList(); out.push(`<blockquote>${mdInline(m[1])}</blockquote>`); continue; }
+    endList(); para.push(trimmed);
+  }
+  if (code !== null) out.push(`<pre>${esc(code.join('\n'))}</pre>`);
+  endPara(); endList();
+  return out.join('');
+}
+/* The update dialog: the release notes as formatted text, folded with "Show more" when they are long. */
+function updateDialog(info) {
+  return new Promise(res => {
+    const w = $('#modal');
+    const notes = String(info.notes || '').split('\n').filter(l => !/^\W*full changelog/i.test(l.trim())).join('\n').trim();
+    w.innerHTML = `<div class="modal wide" role="dialog" aria-modal="true" aria-label="Update available"><h3>Update available</h3>
+      <p>Vinyl ${esc(info.latest)} is ready. You have ${esc(info.current)}.</p>
+      ${notes ? `<div class="md-notes"><div class="md fold">${mdToHtml(notes)}</div><button class="chip md-more" type="button" hidden>Show more</button></div>` : ''}
+      <div class="btns"><button class="chip" data-c="">Not now</button><button class="pill-btn" data-c="yes">Install and restart</button></div></div>`;
+    w.hidden = false;
+    const body = $('.md', w), more = $('.md-more', w);
+    if (body && body.scrollHeight > body.clientHeight + 4) { // only long notes get the button
+      more.hidden = false;
+      more.onclick = () => { const open = body.classList.toggle('open'); more.textContent = open ? 'Show less' : 'Show more'; };
+    } else body?.classList.remove('fold');
+    const done = v => { w.hidden = true; w.innerHTML = ''; modal.close = null; res(v); };
+    modal.close = () => done(false);
+    $$('[data-c]', w).forEach(b => { b.onclick = () => done(b.dataset.c === 'yes'); });
+    w.onmousedown = e => { if (e.target === w) done(false); };
+    $('[data-c="yes"]', w).focus();
+  });
+}
 let updateChecking = false;
 async function checkForUpdate({ manual = false } = {}) {
   if (updateChecking) return null; // already looking: extra clicks don't start more checks, toasts or dialogs
@@ -873,8 +932,7 @@ async function checkForUpdate_({ manual }) {
   catch (e) { if (manual) toast(e.message); return null; }
   S.update = info;
   if (!info.available) { if (manual) toast(`You're up to date (Vinyl ${info.current})`); return info; }
-  const notes = String(info.notes || '').replace(/\*\*|__|`/g, '').split('\n').filter(l => l.trim() && !/^full changelog/i.test(l.trim())).slice(0, 8).join('\n');
-  const yes = await modal({ title: 'Update available', text: `Vinyl ${info.latest} is ready. You have ${info.current}.${notes ? '\n\n' + notes : ''}`, ok: 'Install and restart', cancel: 'Not now' });
+  const yes = await updateDialog(info);
   if (yes) installUpdate();
   return info;
 }
