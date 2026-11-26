@@ -151,6 +151,9 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 .row.now .num .n{display:none}
 .row.now .num .eq{display:flex}
 .row.now:hover .num .eq{display:none}
+/* the song that is playing offers pause instead of play (clicking its number already toggles) */
+body.playing .row.now:hover .num svg.p{display:none}
+body.playing .row.now:hover .num svg.pa{display:block}
 .eq{display:none;gap:2px;align-items:flex-end;justify-content:center;height:14px}
 .eq i{height:4px;width:3px;background:var(--accent);border-radius:2px;animation:eq .9s ease-in-out infinite}
 .eq i:nth-child(2){animation-delay:-.4s}

@@ -595,7 +595,7 @@ function regList(ids) { const k = 'l' + Object.keys(S.lists).length; S.lists[k] 
 function rowHTML(id, i, key, { album = true, removeFrom = null, n = i + 1, queueSec = null } = {}) {
     const t = trackOf(id); if (!t) return '';
     return `<div class="row ${P.cur?.id === id ? 'now' : ''}" data-id="${esc(id)}" data-list="${key}" data-i="${i}">
-      <div class="num"><span class="n">${n}</span><span class="eq"><i></i><i></i><i></i></span><svg class="p" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg></div>
+      <div class="num"><span class="n">${n}</span><span class="eq"><i></i><i></i><i></i></span><svg class="p" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg><svg class="pa" viewBox="0 0 24 24"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z"/></svg></div>
       <div class="title">${artHTML(t)}<div class="txt"><div class="tt">${esc(t.title)}</div><div class="ta">${artistLink(t)}</div></div></div>
       ${album ? `<div class="alb">${t.album ? `<a href="${albumHref(t)}">${esc(t.album)}</a>` : ''}</div>` : ''}
       ${heartBtn(id)}
@@ -606,7 +606,7 @@ function rowHTML(id, i, key, { album = true, removeFrom = null, n = i + 1, queue
     </div>`;
 }
 const webRowHTML = (i, n, key, idx) => `<div class="row web-row ${P.cur?.id === 'pv:' + i.id ? 'now' : ''}" data-id="pv:${esc(i.id)}" data-web="${esc(i.id)}" data-list="${key}" data-i="${idx}">
-      <div class="num"><span class="n">${n}</span><span class="eq"><i></i><i></i><i></i></span><svg class="p" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg></div>
+      <div class="num"><span class="n">${n}</span><span class="eq"><i></i><i></i><i></i></span><svg class="p" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg><svg class="pa" viewBox="0 0 24 24"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z"/></svg></div>
       <div class="title"><div class="art" style="background-image:url('${esc(i.thumbnail)}')"></div><div class="txt"><div class="tt">${esc(i.title)}</div><div class="ta"><span class="newtag">NEW</span>${esc(i.artist)}${i.because ? ' · like ' + esc(i.because) : ''}</div></div></div>
       <div class="alb">${esc(i.album || 'New to your library')}</div><div></div><div class="dur">${fmt(i.duration)}</div>
       <button class="more" data-act="add-catalog" data-key="${esc(i.id)}" title="Add to library" aria-label="Add ${esc(i.title)} to library">${ICON.plus}</button></div>`;
