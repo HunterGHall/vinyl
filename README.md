@@ -12,8 +12,7 @@ Your own songs on Windows, with Daily Mixes, new music from similar artists, and
 
 <div align="center">
 
-[![Release](https://img.shields.io/github/v/release/HunterGHall/vinyl?label=release)](https://github.com/HunterGHall/vinyl/releases)
-[![License](https://img.shields.io/github/license/HunterGHall/vinyl)](LICENSE)
+
 [![Build](https://github.com/HunterGHall/vinyl/actions/workflows/release.yml/badge.svg)](https://github.com/HunterGHall/vinyl/actions/workflows/release.yml)
 [![Rust](https://img.shields.io/badge/rust-2024_edition-orange?logo=rust)](Cargo.toml)
 [![WebView2](https://img.shields.io/badge/WebView2-0078D7?logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCc+PHBhdGggZmlsbD0nd2hpdGUnIGQ9J00zIDNoOC41djguNUgzek0xMi41IDNIMjF2OC41aC04LjV6TTMgMTIuNWg4LjVWMjFIM3pNMTIuNSAxMi41SDIxVjIxaC04LjV6Jy8+PC9zdmc+)](https://developer.microsoft.com/microsoft-edge/webview2/)
