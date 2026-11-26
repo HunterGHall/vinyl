@@ -19,6 +19,7 @@ async function api(path, opts = {}) {
 }
 
 const ICON = {
+  copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
   pin: '<svg viewBox="0 0 24 24"><path d="M14.5 3.5l6 6-2 1-2.2 2.2.5 4.3-1.3 1.3-3.3-3.3-5.2 5.2-1-1 5.2-5.2-3.3-3.3 1.3-1.3 4.3.5L13.5 5.5z"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z"/></svg>',
@@ -828,7 +829,7 @@ function sourceIds(key) {
   const [kind, ...rest] = key.split(':'), arg = rest.join(':');
   switch (kind) {
     case 'liked': return [...S.likes.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
-    case 'playlist': return (S.playlists.find(p => p.id === arg)?.track_ids || []).filter(id => S.by.has(id));
+    case 'playlist': return sortIds((S.playlists.find(p => p.id === arg)?.track_ids || []).filter(id => S.by.has(id)), plSortOf(arg));
     case 'mix': { const m = mixes().find(x => String(x.n) === arg); return m ? mixIds(m) : []; }
     case 'artist': return (taste().byArtist.get(arg) || []).slice().sort((a, b) => (b.plays || 0) - (a.plays || 0) || a.title.localeCompare(b.title)).map(t => t.id);
     case 'album': return (albums().find(a => a.key === arg)?.tracks || []).slice().sort((x, y) => x.title.localeCompare(y.title)).map(t => t.id);
@@ -863,14 +864,18 @@ function renderLiked() {
 /* ---- app updates (the server asks GitHub for the latest release) ---- */
 /* ---- release notes: a small, safe markdown renderer (everything is escaped first, then formatted) ---- */
 function mdInline(t) {
-  return t
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<span class="md-link" title="$2">$1</span>') // shown, not followed: a click would load the page inside the app
-    .replace(/https?:\/\/github\.com\/[^\s/]+\/[^\s/]+\/(?:pull|issues)\/(\d+)/g, '#$1') // "in https://github.com/o/r/pull/12" -> "in #12"
+  const keep = [], hold = html => `\u0000${keep.push(html) - 1}\u0000`;
+  const link = (url, text) => hold(`<a class="md-link" href="#" data-url="${url}" title="${url}">${text}</a>`);
+  t = t
+    .replace(/`([^`]+)`/g, (_, c) => hold(`<code>${c}</code>`))
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, text, url) => link(url, text))
+    .replace(/https?:\/\/github\.com\/[^\s/]+\/[^\s/]+\/(?:pull|issues)\/(\d+)/g, (url, n) => link(url, '#' + n)) // "in https://github.com/o/r/pull/12" -> "in #12"
+    .replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)]/g, url => link(url, url))
     .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, '<b>$2</b>')
     .replace(/(^|[^\w*])\*(?=\S)(.+?)(?<=\S)\*(?!\w)/g, '$1<i>$2</i>')
     .replace(/(^|\W)_(?=\S)(.+?)(?<=\S)_(?!\w)/g, '$1<i>$2</i>')
     .replace(/~~(.+?)~~/g, '<s>$1</s>');
+  return t.replace(/\u0000(\d+)\u0000/g, (_, i) => keep[+i]);
 }
 function mdToHtml(src) {
   const out = []; let list = null, para = [], code = null;
@@ -898,15 +903,17 @@ function mdToHtml(src) {
   endPara(); endList();
   return out.join('');
 }
-/* The update dialog: the release notes as formatted text, folded with "Show more" when they are long. */
-function updateDialog(info) {
+/* Release notes without GitHub's "Full Changelog: <link>" footer (which is all some releases have). */
+const cleanNotes = notes => String(notes || '').split('\n').filter(l => !/^\W*full changelog/i.test(l.trim())).join('\n').trim();
+/* A dialog with release notes as formatted text, folded with "Show more" when they are long. */
+function notesDialog({ title, sub = '', notes = '', ok = 'OK', cancel = '' }) {
   return new Promise(res => {
     const w = $('#modal');
-    const notes = String(info.notes || '').split('\n').filter(l => !/^\W*full changelog/i.test(l.trim())).join('\n').trim();
-    w.innerHTML = `<div class="modal wide" role="dialog" aria-modal="true" aria-label="Update available"><h3>Update available</h3>
-      <p>Vinyl ${esc(info.latest)} is ready. You have ${esc(info.current)}.</p>
+    notes = cleanNotes(notes);
+    w.innerHTML = `<div class="modal wide" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h3>${esc(title)}</h3>
+      ${sub ? `<p>${esc(sub)}</p>` : ''}
       ${notes ? `<div class="md-notes"><div class="md fold">${mdToHtml(notes)}</div><button class="chip md-more" type="button" hidden>Show more</button></div>` : ''}
-      <div class="btns"><button class="chip" data-c="">Not now</button><button class="pill-btn" data-c="yes">Install and restart</button></div></div>`;
+      <div class="btns">${cancel ? `<button class="chip" data-c="">${esc(cancel)}</button>` : ''}<button class="pill-btn" data-c="yes">${esc(ok)}</button></div></div>`;
     w.hidden = false;
     const body = $('.md', w), more = $('.md-more', w);
     if (body && body.scrollHeight > body.clientHeight + 4) { // only long notes get the button
@@ -920,6 +927,21 @@ function updateDialog(info) {
     $('[data-c="yes"]', w).focus();
   });
 }
+const updateDialog = info => notesDialog({ title: 'Update available', sub: `Vinyl ${info.latest} is ready. You have ${info.current}.`, notes: info.notes, ok: 'Install and restart', cancel: 'Not now' });
+
+/* ---- 2: after an update, show once what changed in the version now running ---- */
+const verParts = v => String(v || '').replace(/^v/i, '').split(/[.+-]/).map(n => parseInt(n, 10) || 0);
+const verNewer = (a, b) => { const x = verParts(a), y = verParts(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+async function showWhatsNew() {
+  let st; try { st = await api('/api/update/status'); } catch { return; }
+  const last = lsGet('vinyl.lastVersion', null);
+  lsSet('vinyl.lastVersion', st.current);
+  if (!last || !verNewer(st.current, last)) return; // first start, or nothing new since last time
+  let r; try { r = await api('/api/update/notes'); } catch { return; }
+  if (!cleanNotes(r.notes)) return; // nothing worth a dialog
+  await notesDialog({ title: `What's new in Vinyl ${st.current}`, notes: r.notes, ok: 'Got it' });
+}
+const openUrl = url => api('/api/open', { method: 'POST', body: { url } }).catch(e => toast(e.message));
 let updateChecking = false;
 async function checkForUpdate({ manual = false } = {}) {
   if (updateChecking) return null; // already looking: extra clicks don't start more checks, toasts or dialogs
@@ -1023,6 +1045,7 @@ function renderSettings() {
       <div class="set-row"><div><b>Lyrics</b><div class="note">Look up lyrics for your songs and show them in Now Playing.</div></div><label class="switch"><input type="checkbox" data-setting="lyrics_enabled" aria-label="Lyrics" ${S.settings?.lyrics_enabled !== false ? 'checked' : ''}><span></span></label></div>
     </section>
     <section class="shelf"><div class="shelf-head"><div><h2>Your data</h2><div class="sub">Everything lives in the data and library folders next to the app</div></div></div>
+      <div class="set-row"><div><b>Folders</b><div class="note">Your songs, and Vinyl's settings, playlists and history files.</div></div><div class="set-btns"><button class="pill-btn ghost" data-act="open-folder" data-which="library">Songs folder</button><button class="pill-btn ghost" data-act="open-folder" data-which="data">Data folder</button></div></div>
       <div class="set-row"><div><b>Find duplicate songs</b><div class="note">Finds copies of the same song and lets you remove the extras. Nothing is deleted until you confirm.</div></div><button class="pill-btn ghost" data-act="find-dups">Find</button></div>
       <div class="set-row"><div><b>Refresh data files</b><div class="note">Rewrites the saved JSON files (settings, playlists, lyrics and more) in the readable, indented format. Nothing is deleted.</div></div><button class="pill-btn ghost" data-act="refresh-json">Refresh</button></div>
       <div class="set-row"><div><b>Reset recommendations</b><div class="note">Clears liked songs, listening history and play counts. Your songs and playlists stay.</div></div><button class="pill-btn ghost" data-act="reset-recs">Reset</button></div>
@@ -1068,8 +1091,11 @@ function renderPlaylist(id) {
     recs = r.length ? `<div class="sect-title">Recommended songs</div><div class="note" style="margin-bottom:8px">Based on what is in this playlist</div>${recRows(r.map(t => t.id), id)}` : '';
   }
   const cover = `<div class="cover-wrap">${playlistArt(pl)}<button class="cover-btn" data-act="pl-cover" data-id="${esc(id)}">${ICON.image}<span>Change cover</span></button></div>`;
-  $('#view').innerHTML = `${heroHTML({ kind: 'Playlist', title: pl.name, art: cover, meta: `<b>${plural(ids.length, 'song')}</b>${ids.length ? ` · ${fmtLong(totalDur(ids))}` : ''}` })}
-    ${ids.length ? actionsHTML('playlist:' + id, { menu }) + trackRows(ids, { removeFrom: id, sort: 'playlist:' + id }) : `<div class="actions">${menu}</div><div class="empty"><b>This playlist is empty</b>Add songs from any song's ••• menu, or pick from the recommendations below.</div>`}`;
+  const by = plSortOf(id), custom = by === 'custom';
+  const chips = ids.length > 1 ? `<div class="pl-sorts">${Object.entries({ custom: 'Custom order', added: 'Recently added', title: 'Title', artist: 'Artist', plays: 'Most played' }).map(([k, v]) => `<button class="chip ${by === k ? 'on' : ''}" data-act="pl-sort" data-pid="${esc(id)}" data-sort="${k}">${v}</button>`).join('')}${custom ? '' : '<span class="note">Switch to Custom order to drag songs around.</span>'}</div>` : '';
+  const created = pl.created ? ` · Created ${new Date(pl.created * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : '';
+  $('#view').innerHTML = `${heroHTML({ kind: 'Playlist', title: pl.name, art: cover, meta: `<b>${plural(ids.length, 'song')}</b>${ids.length ? ` · ${fmtLong(totalDur(ids))}` : ''}${created}` })}
+    ${ids.length ? actionsHTML('playlist:' + id, { menu }) + chips + trackRows(ids, custom ? { removeFrom: id, sort: 'playlist:' + id } : { removeFrom: id }) : `<div class="actions">${menu}</div><div class="empty"><b>This playlist is empty</b>Add songs from any song's ••• menu, or pick from the recommendations below.</div>`}`;
   tint(ids);
 }
 function recRows(ids, pid) {
@@ -1129,10 +1155,13 @@ function renderArtist(name) {
   tint(ids);
 }
 
+const SORT_BY = { added: (a, b) => b.added - a.added, title: (a, b) => a.title.localeCompare(b.title), artist: (a, b) => (a.artist || '').localeCompare(b.artist || '') || a.title.localeCompare(b.title), plays: (a, b) => (b.plays || 0) - (a.plays || 0) };
+const sortIds = (ids, by) => SORT_BY[by] ? ids.map(trackOf).filter(Boolean).sort(SORT_BY[by]).map(t => t.id) : ids;
+const plSortOf = pid => lsGet('vinyl.plSort', {})[pid] || 'custom';
 function renderLibrary_() {
   const sorts = { added: 'Recently added', title: 'Title', artist: 'Artist', plays: 'Most played' };
   let ts = S.tracks.slice();
-  ts.sort({ added: (a, b) => b.added - a.added, title: (a, b) => a.title.localeCompare(b.title), artist: (a, b) => (a.artist || '').localeCompare(b.artist || '') || a.title.localeCompare(b.title), plays: (a, b) => (b.plays || 0) - (a.plays || 0) }[S.sort]);
+  ts.sort(SORT_BY[S.sort] || SORT_BY.added);
   const ids = ts.map(t => t.id);
   $('#view').innerHTML = `<h1 class="big">Your songs</h1><div class="meta note" style="margin-top:6px">${plural(ids.length, 'song')} · ${fmtLong(totalDur(ids))}</div>
     <div class="actions" style="margin-top:10px"><button class="go lg" data-act="play-ids" data-key="all" aria-label="Play all">${ICON.play}</button>
@@ -1675,6 +1704,7 @@ function trackMenu(id, x, y, fromPl) {
     { label: 'Add to queue', icon: ICON.queue, run: () => queueEnd([id]) },
     { label: 'Go to artist', icon: ICON.user, run: () => go(`#/artist/${enc(primaryArtist(t.artist))}`) },
   ];
+  items.push({ label: 'Copy song info', icon: ICON.copy, run: () => copyText(t.artist ? `${t.artist} - ${t.title}` : t.title, 'Copied song info') });
   if (S.settings?.lyrics_enabled !== false) items.push({ label: 'Refresh lyrics', icon: ICON.list, run: () => refreshLyrics(t) });
   if (fromPl) items.push({ sep: 1 }, { label: 'Remove from this playlist', icon: ICON.trash, run: () => removeFromPlaylist(fromPl, id) });
   items.push({ sep: 1 }, { label: 'Delete from library…', icon: ICON.trash, danger: true, run: () => deleteTrack(t) });
@@ -1688,6 +1718,15 @@ async function refreshLyrics(t) {
   lyricCache.set(t.id, res);
   if (P.cur?.id === t.id) loadLyrics(t); // showing this song: redraw from the new copy
   toast({ found: 'Lyrics updated', none: 'No lyrics found for this song', instrumental: 'Marked as instrumental', disabled: 'Lyrics are turned off in Settings', error: "Couldn't reach the lyrics service" }[res.status] || 'Lyrics updated');
+}
+async function copyText(text, done = 'Copied') {
+  try { await navigator.clipboard.writeText(text); }
+  catch { // older WebView or no permission: the textarea fallback
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove();
+    if (!ok) { toast("Couldn't copy"); return; }
+  }
+  toast(done);
 }
 function playlistPicker(ids, x, y) {
   const items = [{ head: 'Add to playlist' }, { label: 'New playlist', icon: ICON.plus, run: async () => { const pl = await newPlaylist(); if (pl) await addToPlaylist(pl.id, ids); } }];
@@ -2042,6 +2081,7 @@ document.addEventListener('click', async e => {
       case 'play-ids': playSource(d.key); return;
       case 'install-deps': { try { await api('/api/deps/install', { method: 'POST' }); } catch (e) { toast(e.message); return; } S.depsWas = true; refreshDeps(); return; }
       case 'check-update': { const i = await checkForUpdate({ manual: true }); const el = $('#upd-ver'); if (el && i) el.textContent = `Vinyl ${i.current}${i.available ? ` · ${i.latest} is available` : ' · up to date'}`; return; }
+      case 'open-folder': api('/api/open-folder', { method: 'POST', body: { which: d.which } }).catch(err => toast(err.message)); return;
       case 'find-dups': go('#/duplicates'); return;
       case 'merge-dups': mergeDuplicates(); return;
       case 'refresh-json': { actEl.disabled = true; try { const r = await api('/api/data/refresh', { method: 'POST' }); toast(`Refreshed ${r.files} files`); } catch (e) { toast(e.message); } actEl.disabled = false; return; }
@@ -2062,6 +2102,7 @@ document.addEventListener('click', async e => {
       case 'playlist-menu': playlistMenu(d.id, r.left, r.bottom + 4); return;
       case 'goto-add': go('#/add'); return;
       case 'sort': S.sort = d.sort; lsSet('vinyl.sort', S.sort); renderRoute(true); return;
+      case 'pl-sort': { const all = lsGet('vinyl.plSort', {}); if (d.sort === 'custom') delete all[d.pid]; else all[d.pid] = d.sort; lsSet('vinyl.plSort', all); renderRoute(true); return; }
       case 'queue-remove': queueRemove(d.sec, +d.i); return;
       case 'clear-queue': P.userQ = []; renderRoute(true); renderNP(); saveStateSoon(); return;
       case 'refresh-lyrics': if (P.cur) loadLyrics(P.cur, true); return;
@@ -2097,6 +2138,7 @@ document.addEventListener('click', async e => {
       }
     }
   }
+  const ext = t.closest('a[data-url]'); if (ext) { e.preventDefault(); openUrl(ext.dataset.url); return; }
   const lyr = t.closest('.lyr p[data-t]'); if (lyr) { audio.currentTime = +lyr.dataset.t; return; }
   const chip = t.closest('#lib-chips .chip'); if (chip) { S.libFilter = chip.dataset.filter; renderLibrary(); return; }
   const row = t.closest('.row');
@@ -2238,7 +2280,7 @@ const skeletonHTML = () => `<div class="skel"><div class="skel-title"></div><div
   else applyData(fresh); // same on screen: just refresh the numbers (plays, durations) without redrawing
 
   setTimeout(mediaKeyLoop, 1500); // after the first screen is up
-  setTimeout(() => checkForUpdate(), 2500); // ask GitHub whether there is a newer release
+  setTimeout(async () => { await showWhatsNew(); checkForUpdate(); }, 2500); // What's new (once after an update), then look for a newer release // ask GitHub whether there is a newer release
   setInterval(async () => { // pick up songs added or renamed outside the app (downloads finishing, new files)
     if (document.hidden) return;
     const sig = await fetchSig();

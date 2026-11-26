@@ -2,4 +2,5 @@
 
 pub mod deps;
 pub mod mediakeys;
+pub mod open;
 pub mod update;

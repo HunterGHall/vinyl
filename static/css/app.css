@@ -362,6 +362,10 @@ body.has-sel .toasts{bottom:calc(var(--dockh) + 90px)}
 .pick input{width:16px;height:16px;accent-color:var(--accent);flex:none}
 .pick .pk-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
 .pick .pk-n{color:var(--dim);font-size:13px}
+.set-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.pl-sorts{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:2px 0 12px}
+.pl-sorts .note{margin-left:6px;font-size:12.5px}
+.md a.md-link{cursor:pointer}
 .modal.wide{width:min(560px,100%)}
 .md-notes{margin:4px 0 6px}
 .md{font-size:13.5px;line-height:1.55;color:var(--dim);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;max-height:52vh;overflow-y:auto;overflow-wrap:anywhere}

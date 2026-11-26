@@ -3,7 +3,7 @@
 use crate::library::*;
 use crate::base::store::{self, lock, paths};
 use crate::base::util::{clip, unquote};
-use crate::system::{deps, mediakeys, update};
+use crate::system::{deps, mediakeys, open, update};
 use crate::music::{discover, download, lyrics};
 use crate::library::tools;
 use serde_json::{Map, Value, json};
@@ -398,6 +398,19 @@ fn route(method: Method, path: &str, cx: &Ctx) -> Resp {
             Err(e) => err(502, &e),
         },
         (Method::Get, ["api", "update", "status"]) => ok(update::status()),
+        (Method::Get, ["api", "update", "notes"]) => match update::current_notes() {
+            Ok(v) => ok(v),
+            Err(e) => err(502, &e),
+        },
+        // ---- opening links and folders outside the app ----
+        (Method::Post, ["api", "open"]) => match open::open_url(b()["url"].as_str().unwrap_or("")) {
+            Ok(()) => empty(204),
+            Err(e) => err(400, &e),
+        },
+        (Method::Post, ["api", "open-folder"]) => match open::open_folder(b()["which"].as_str().unwrap_or("")) {
+            Ok(()) => empty(204),
+            Err(e) => err(400, &e),
+        },
         (Method::Post, ["api", "update", "install"]) => json_resp(202, json!({"started": update::install()})),
 
         // ---- discovery (Deezer) ----

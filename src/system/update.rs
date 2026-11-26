@@ -43,10 +43,9 @@ fn trusted_download(url: &str) -> bool {
     ["github.com", "githubusercontent.com"].iter().any(|d| host == *d || host.ends_with(&format!(".{d}")))
 }
 
-/// What the latest release looks like, and whether it is newer than this build.
-pub fn check() -> Result<Value, String> {
+fn get_release(url: &str) -> Result<Value, String> {
     let resp = util::agent()
-        .get(&releases_url())
+        .get(url)
         .set("User-Agent", "Vinyl-updater")
         .set("Accept", "application/vnd.github+json")
         .timeout(Duration::from_secs(10))
@@ -57,7 +56,22 @@ pub fn check() -> Result<Value, String> {
         })?;
     let mut body = String::new();
     resp.into_reader().take(2_000_000).read_to_string(&mut body).map_err(|e| e.to_string())?;
-    let rel: Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    serde_json::from_str(&body).map_err(|e| e.to_string())
+}
+
+/// The release notes of the version that is running, for "What's new" after an update.
+pub fn current_notes() -> Result<Value, String> {
+    if std::env::var_os("VINYL_RELEASES_URL").is_some() {
+        return Ok(json!({"version": VERSION, "notes": ""})); // test mode: no network
+    }
+    let rel = get_release(&format!("https://api.github.com/repos/{REPO}/releases/tags/v{VERSION}"))
+        .or_else(|_| get_release(&format!("https://api.github.com/repos/{REPO}/releases/tags/{VERSION}")))?;
+    Ok(json!({"version": VERSION, "notes": rel["body"].as_str().unwrap_or(""), "page": rel["html_url"]}))
+}
+
+/// What the latest release looks like, and whether it is newer than this build.
+pub fn check() -> Result<Value, String> {
+    let rel = get_release(&releases_url())?;
     let tag = rel["tag_name"].as_str().unwrap_or("").to_string();
     let asset = rel["assets"].as_array().into_iter().flatten().find(|a| a["name"] == ASSET);
     let available = !tag.is_empty() && is_newer(&tag, VERSION) && asset.is_some();

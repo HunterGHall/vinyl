@@ -591,7 +591,7 @@ pub fn new_id() -> String {
 pub fn create_playlist_record(name: &str) -> Value {
     let _g = lock();
     let mut playlists = load_playlists();
-    let playlist = json!({"id": new_id(), "name": name, "track_ids": []});
+    let playlist = json!({"id": new_id(), "name": name, "track_ids": [], "created": store::now()});
     playlists.as_array_mut().unwrap().push(playlist.clone());
     save_playlists(&playlists);
     playlist
