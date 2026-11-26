@@ -332,6 +332,15 @@ h1.big{font:700 clamp(32px,5cqw,44px)/1.08 var(--display);letter-spacing:-.025em
 #vol{flex:none;width:86px}
 
 /* ---- menus, modal, toasts ---- */
+.selbar{position:fixed;left:calc(50% + var(--sidew) / 2);transform:translateX(-50%);bottom:calc(var(--dockh) + 28px);z-index:35;display:flex;align-items:center;gap:2px;padding:5px 5px 5px 16px;max-width:calc(100vw - var(--sidew) - 40px);overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:99px;box-shadow:0 12px 36px rgba(0,0,0,.45);font-size:13.5px;white-space:nowrap;animation:pop .2s ease-out}
+.selbar[hidden]{display:none}
+.selbar b{font-weight:600;margin-right:8px}
+.selbar button{padding:7px 12px;border-radius:99px;font-weight:600;color:var(--text)}
+.selbar button:hover{background:var(--hover)}
+.selbar .danger{color:#ff6b6b}
+.selbar .x{width:30px;height:30px;padding:0;display:grid;place-items:center;color:var(--dim)}
+.selbar .x svg{width:16px;height:16px}
+body.has-sel .toasts{bottom:calc(var(--dockh) + 90px)}
 .menu{position:fixed;z-index:50;min-width:220px;max-width:300px;max-height:70vh;overflow-y:auto;background:rgba(40,40,45,.96);backdrop-filter:blur(20px);border-radius:12px;padding:5px;box-shadow:0 18px 48px rgba(0,0,0,.6);border:1px solid var(--line)}
 .mi{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:9px 12px;border-radius:7px;font-size:14px}
 .mi:hover,.mi:focus-visible{background:var(--accent);color:var(--on-accent)}

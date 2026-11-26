@@ -380,7 +380,11 @@ pub fn set_liked(track_id: &str, liked: bool) -> bool {
 
 // ---------------- loudness ----------------
 
-static LOUDNESS_LOCK: Mutex<()> = Mutex::new(()); // one ffmpeg measurement at a time
+// LOUDNESS_LOCK guards reading and writing loudness.json and is only held for that moment;
+// MEASURE_LOCK keeps ffmpeg to one measurement at a time. Holding the file lock through a
+// measurement (seconds per song) made deleting songs wait for the whole background scan.
+static LOUDNESS_LOCK: Mutex<()> = Mutex::new(());
+static MEASURE_LOCK: Mutex<()> = Mutex::new(());
 static SCAN_RUNNING: AtomicBool = AtomicBool::new(false);
 static LUFS_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"I:\s+(-?\d+(?:\.\d+)?)\s+LUFS").unwrap());
 static PEAK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Peak:\s+(-?\d+(?:\.\d+)?)\s+dBFS").unwrap());
@@ -426,12 +430,23 @@ pub fn cached_gain_db(path: &Path, loudness: &Value) -> Option<f64> {
 
 /// Measures (if not cached) and returns the gain in dB, or None.
 pub fn ensure_loudness(path: &Path) -> Option<f64> {
-    let _g = LOUDNESS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut loudness = load_loudness();
-    if let Some(g) = cached_gain_db(path, &loudness) {
+    let cached = || {
+        let _g = LOUDNESS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        cached_gain_db(path, &load_loudness())
+    };
+    if let Some(g) = cached() {
         return Some(g);
     }
-    let (lufs, peak) = measure_loudness(path)?;
+    let _m = MEASURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(g) = cached() {
+        return Some(g); // measured by someone else while this waited its turn
+    }
+    let (lufs, peak) = measure_loudness(path)?; // the slow part, with loudness.json free for others
+    let _g = LOUDNESS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if !path.is_file() {
+        return None; // deleted while it was being measured: don't write it back
+    }
+    let mut loudness = load_loudness();
     loudness[file_name(path)] = json!({"mtime": mtime(path)?, "lufs": lufs, "peak": peak});
     save(&paths().loudness, &loudness);
     Some(gain_db_from(lufs, peak))
@@ -624,6 +639,7 @@ pub fn delete_tracks(track_ids: &[String]) -> usize {
     if ids.is_empty() {
         return 0;
     }
+    invalidate_library_cache();
     let gone = |t: &str| ids.iter().any(|i| i.as_str() == t);
     {
         let _g = lock();
@@ -802,6 +818,12 @@ struct CachedLibrary {
     body: std::sync::Arc<Vec<u8>>,
 }
 static LIBRARY_CACHE: Mutex<Option<CachedLibrary>> = Mutex::new(None);
+
+/// Forgets the cached song list, so the next request rebuilds it. Call after adding or deleting files:
+/// Windows doesn't always update the folder's modified time straight away, so the key alone can miss it.
+pub fn invalidate_library_cache() {
+    *LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
 
 fn library_key() -> LibraryKey {
     let modified = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();

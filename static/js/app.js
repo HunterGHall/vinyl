@@ -1862,7 +1862,7 @@ function renderRoute(keepScroll) {
   }
   view.scrollTop = top;
   $('#b-queue').classList.toggle('on', route.name === 'queue');
-  renderLibrary(); markNow(); onScroll();
+  renderLibrary(); markNow(); onScroll(); updateSelBar();
   document.title = 'Vinyl';
 }
 function onScroll() { }
@@ -1876,6 +1876,86 @@ const onSearchInput = {};
 $('#q').addEventListener('focus', () => { if (route.name !== 'search') location.hash = '#/search'; });
 
 /* -------------------------------------------------------------- interaction */
+
+/* ---- acting on a selection: Ctrl/Shift click (or Ctrl+A) picks songs, a bar offers what to do with them ---- */
+document.body.insertAdjacentHTML('beforeend', '<div class="selbar" id="selbar" role="toolbar" aria-label="Selected songs" hidden></div>');
+const selIds = () => [...new Set($$('#view .row.sel').map(r => r.dataset.id).filter(id => id && !id.startsWith('pv:') && trackOf(id)))];
+function clearSel() { $$('.row.sel').forEach(r => r.classList.remove('sel')); updateSelBar(); }
+function updateSelBar() {
+  const bar = $('#selbar'), ids = selIds();
+  const show = ids.length > 1; // one song has its own ••• menu
+  bar.hidden = !show; document.body.classList.toggle('has-sel', show);
+  if (!show) { bar.innerHTML = ''; return; }
+  const inPl = route.name === 'playlist' && route.arg;
+  bar.innerHTML = `<b>${ids.length} selected</b>
+    <button data-act="sel-play">Play</button><button data-act="sel-queue">Add to queue</button><button data-act="sel-like">Like</button>
+    <button data-act="sel-add">Add to playlist</button>${inPl ? '<button data-act="sel-move">Move to…</button><button data-act="sel-remove">Remove from playlist</button>' : ''}
+    <button class="danger" data-act="sel-delete">Delete</button>
+    <button class="x" data-act="sel-clear" aria-label="Clear selection" title="Clear selection (Esc)">${ICON.x}</button>`;
+}
+/* After songs are deleted: drop them from what's playing and queued, then reload. */
+async function afterTracksGone(gone) {
+  const wasCur = P.cur && gone.has(P.cur.id);
+  if (wasCur) { audio.pause(); P.pos = Math.max(-1, P.order.indexOf(P.cur.id) - 1); }
+  P.ctx = P.ctx.filter(x => !gone.has(x)); P.order = P.order.filter(x => !gone.has(x)); P.userQ = P.userQ.filter(x => !gone.has(x));
+  await loadAll();
+  if (wasCur) { P.cur = null; if (P.order.length || P.userQ.length) next(false); else { audio.removeAttribute('src'); renderBarTrack(); renderNP(); } }
+  S.cache = {};
+}
+async function deleteMany(ids) {
+  if (!await modal({ title: `Delete ${plural(ids.length, 'song')} from your library?`, text: `${ids.length === 2 ? 'Both songs' : `All ${ids.length} songs`} will be deleted from disk, and removed from every playlist. This cannot be undone.`, ok: 'Delete', danger: true })) return;
+  let r;
+  try { r = await api('/api/tracks/batch-delete', { method: 'POST', body: { track_ids: ids } }); }
+  catch (e) { toast(e.message); return; }
+  await afterTracksGone(new Set(ids));
+  renderLibrary(); renderRoute(true);
+  toast(`Deleted ${plural(r.deleted ?? ids.length, 'song')}`);
+}
+async function removeManyFromPlaylist(pid, ids) {
+  const pl = S.playlists.find(p => p.id === pid);
+  try { await api(`/api/playlists/${pid}/tracks/batch-remove`, { method: 'POST', body: { track_ids: ids } }); }
+  catch (e) { toast(e.message); return; }
+  await refreshPlaylists(); renderRoute(true);
+  toast(`Removed ${plural(ids.length, 'song')} from ${pl?.name || 'the playlist'}`);
+}
+async function moveToPlaylist(ids, from, to) {
+  const target = S.playlists.find(p => p.id === to);
+  try {
+    await api(`/api/playlists/${to}/tracks`, { method: 'POST', body: { track_ids: ids } }); // songs already there are kept once
+    await api(`/api/playlists/${from}/tracks/batch-remove`, { method: 'POST', body: { track_ids: ids } });
+  } catch (e) { toast(e.message); await refreshPlaylists(); renderRoute(true); return; }
+  await refreshPlaylists(); renderRoute(true);
+  toast(`Moved ${plural(ids.length, 'song')} to ${target?.name || 'the playlist'}`);
+}
+function movePicker(ids, from, x, y) {
+  const others = S.playlists.filter(p => p.id !== from);
+  const items = [{ head: 'Move to playlist' }, { label: 'New playlist', icon: ICON.plus, run: async () => { const pl = await newPlaylist(); if (pl) await moveToPlaylist(ids, from, pl.id); } }];
+  for (const pl of others) items.push({ label: pl.name, run: () => moveToPlaylist(ids, from, pl.id) });
+  openMenu(x, y, items);
+}
+function selAction(act, el) {
+  const ids = selIds(); if (!ids.length) return;
+  const r = el.getBoundingClientRect(), x = r.left, y = r.top - 8;
+  const above = () => { const m = $('#menu'); if (!m.hidden) m.style.top = Math.max(8, y - m.offsetHeight) + 'px'; }; // open upward, over the bar
+  switch (act) {
+    case 'sel-play': setContext(ids, 0, { label: 'Selected songs' }); break;
+    case 'sel-queue': queueEnd(ids); break;
+    case 'sel-like': likeMany(ids); break;
+    case 'sel-add': playlistPicker(ids, x, y); above(); return; // the selection stays until a playlist is picked
+    case 'sel-move': movePicker(ids, route.arg, x, y); above(); return;
+    case 'sel-remove': removeManyFromPlaylist(route.arg, ids); break;
+    case 'sel-delete': deleteMany(ids); return;
+    case 'sel-clear': break;
+  }
+  clearSel();
+}
+document.addEventListener('keydown', e => {
+  if (e.target.matches?.('input,textarea,select') || !$('#modal').hidden) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+    const rows = $$('#view .row[data-id]'); if (!rows.length) return;
+    e.preventDefault(); rows.forEach(r => r.classList.add('sel')); updateSelBar();
+  } else if (e.key === 'Escape' && $$('.row.sel').length) clearSel();
+});
 
 document.addEventListener('click', async e => {
   const t = e.target;
@@ -1930,6 +2010,7 @@ document.addEventListener('click', async e => {
       case 'scroll-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); g.scrollBy({ left: +d.dir * Math.max(240, g.clientWidth * 0.85), behavior: 'smooth' }); return; }
       case 'toggle-shelf': { const g = actEl.closest('.shelf').querySelector('.grid'); const open = g.classList.toggle('open'); actEl.textContent = open ? 'Show less' : 'Show all'; actEl.setAttribute('aria-expanded', open); return; }
       case 'add-to-pl': await addToPlaylist(d.pid, [d.id]); actEl.textContent = 'Added'; actEl.disabled = true; actEl.classList.add('done'); return;
+      case 'sel-play': case 'sel-queue': case 'sel-like': case 'sel-add': case 'sel-move': case 'sel-remove': case 'sel-delete': case 'sel-clear': selAction(a, actEl); return;
       case 'search-all': S.searchAll = true; S.searchAllFor = S.q.trim(); renderSearch(); return;
       case 'web-more': web.more = true; drawWeb(); return;
       case 'web-yt': webYouTube(); return;
@@ -1968,6 +2049,7 @@ document.addEventListener('click', async e => {
       rows.forEach((r, i) => r.classList.toggle('sel', i >= lo && i <= hi));
     } else if (e.ctrlKey || e.metaKey) { row.classList.toggle('sel'); S.anchorRow = row; } // one more
     else { $$('.row.sel').forEach(r => r.classList.remove('sel')); row.classList.add('sel'); S.anchorRow = row; }
+    updateSelBar();
     return;
   }
   const hrefEl = t.closest('[data-href]');
